@@ -1,21 +1,20 @@
 """
 This script calculates the DOY baseline for FloodScan raster data at pixel
 level. It is currently in `exploratory` repo as it just uses GDRIVE `.nc` file
-to make local development more effecient (vs loading historical data from blob).
+to make local development more effecient (vs loading historical data from blob)
 
-In the official pipeline we can link it to the historical tif record on the blob.
+In the official pipeline we can link it to the historical tif record on the
+blob.
 
-Steps: 
+Steps:
 
 1. Smooth historical data w/ 10 day rolling mean (centered)
 2. filter data to last 10 years of data (exlcusive of current year)
 3. Calculate the mean SFED value per day of year from smoothed raster stack.
 """
 
-import pandas as pd
-import numpy as np
-import xarray as xr
 import datetime
+
 import matplotlib.pyplot as plt
 
 from src.datasources import floodscan
@@ -29,7 +28,8 @@ current_year = run_date.year
 # Create a sequence of the last 10 years, exclusive of the current year
 last_10_years = list(range(current_year - 10, current_year))
 
-# open historical netcdf file from gdrive just bc so much faster
+# open historical netcdf file from gdrive just bc so much faster than loading
+# from the blob
 da_fs = floodscan.open_historical_floodscan()
 
 # rolling window to smooth out historical data
