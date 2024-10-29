@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
-from typing import Literal
-import rasterio
-import xarray as xr
+
 import rioxarray as rxr
+import xarray as xr
+
+from src.utils import cloud_utils, cog_utils, gen_utils
 
 # from src.utils import blob
 
@@ -29,25 +30,53 @@ def open_historical_floodscan():
     return da
 
 
-# def get_blob_name(
-#     iso3: str,
-#     data_type: Literal["exposure_raster", "exposure_tabular"],
-#     date: str = None,
-# ):
-#     if data_type == "exposure_raster":
-#         if date is None:
-#             raise ValueError("date must be provided for exposure data")
-#         return (
-#             f"{blob.PROJECT_PREFIX}/processed/flood_exposure/"
-#             f"{iso3}/{iso3}_exposure_{date}.tif"
-#         )
-#     elif data_type == "exposure_tabular":
-#         return (
-#             f"{blob.PROJECT_PREFIX}/processed/flood_exposure/tabular/"
-#             f"{iso3}_adm_flood_exposure.parquet"
-#         )
-#     elif data_type == "flood_extent":
-#         return (
-#             f"{blob.PROJECT_PREFIX}/processed/flood_extent/"
-#             f"{iso3}_flood_extent.tif"
-#         )
+def load_floodscan_cogs(
+    start_date,
+    end_date,
+    mode="dev",
+    container_name="global",
+    prefix="raster/cogs/aer_area_300s",
+):
+    container_client = cloud_utils.get_container_client(
+        mode=mode, container_name=container_name
+    )
+    cogs_list = [
+        x.name
+        for x in container_client.list_blobs(name_starts_with=prefix)
+        if (gen_utils.extract_date(x.name).date() >= start_date)
+        & (gen_utils.extract_date(x.name).date() <= end_date)  # noqa
+    ]
+
+    das = []
+    for cog in cogs_list:
+        da_in = process_floodscan_cog(
+            cog_name=cog, container_name="global", mode="dev"
+        )
+        das.append(da_in)
+    return xr.combine_by_coords(das, combine_attrs="drop")
+
+
+def process_floodscan_cog(cog_name, mode, container_name):
+    url_str_tmp = cog_utils.cog_url(
+        cog_name=cog_name, mode=mode, container_name=container_name
+    )
+    da_in = rxr.open_rasterio(url_str_tmp, chunks="auto")
+    da_in["date"] = gen_utils.extract_date(url_str_tmp)
+    da_in = da_in.expand_dims(["date"])
+    da_in = da_in.persist()
+    return da_in
+
+
+def historical_doy_baseline(
+    da, current_year, n_baseline_years=10, n_days_smooth=10
+):
+    last_n_years = list(range(current_year - n_baseline_years, current_year))
+    da_smooth = da.rolling(time=n_days_smooth, center=True).mean()
+    da_smooth_filt = da_smooth.sel(
+        time=da_smooth["time.year"].isin(last_n_years)
+    )
+    da_doy_mean = da_smooth_filt.groupby("time.dayofyear").mean("time")
+    ds_doy_mean = da_doy_mean.to_dataset().rename_vars(
+        {"SFED_AREA": "SFED_BASELINE"}
+    )
+    return ds_doy_mean
