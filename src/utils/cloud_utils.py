@@ -2,6 +2,9 @@ import os
 from io import BytesIO
 
 from azure.storage.blob import ContainerClient
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def get_container_client(mode, container_name):

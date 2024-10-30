@@ -1,18 +1,8 @@
-# import logging
-# from typing import Literal
-# import coloredlogs
 import os
 
-# import pandas as pd
-# import rioxarray as rxr
-# import tqdm
-# import xarray as xr
+from dotenv import load_dotenv
 
-# from src.config.settings import load_pipeline_config
-# from src.utils.cloud_utils import get_cog_url, get_container_client
-
-# logger = logging.getLogger(__name__)
-# coloredlogs.install(level="DEBUG", logger=logger)
+load_dotenv()
 
 
 def cog_url(mode, container_name, cog_name):
