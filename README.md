@@ -1,7 +1,5 @@
 # HDX FloodScan
 
-
-
 ## Directory structure
 
 The code in this repository is organized as follows:
@@ -12,6 +10,31 @@ TBD
 ```
 
 ## Development
+
+### Setup Instructions
+
+Create a virtual env & activate it. Then install the the requirements with
+
+```shells
+pip install -r requirements.txt
+```
+
+Next install module code in src using the command:
+
+```shell
+pip install -e.
+```
+
+### Environment keys
+
+```shell
+DSCI_AZ_SAS_DEV=<provided on request>
+DSCI_AZ_SAS_PROD=<provided on request>
+AZURE_DB_PW=<provided on request>
+AZURE_DB_UID=<provided on request>
+```
+
+### Formatting
 
 All code is formatted according to black and flake8 guidelines.
 The repo is set-up to use pre-commit.
