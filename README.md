@@ -24,7 +24,7 @@ pip install -r requirements.txt
 Next install module code in src using the command:
 
 ```shell
-pip install -e.
+pip install -e .
 ```
 
 ### Environment keys

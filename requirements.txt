@@ -9,3 +9,4 @@ xarray==2024.3.0
 dask==2024.7.0
 scipy==1.14.1
 pre-commit==3.8.0
+netCDF4==1.7.2
