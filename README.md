@@ -11,6 +11,8 @@ TBD
 
 ## Development
 
+This repo is being developed with python version 3.12.4
+
 ### Setup Instructions
 
 Create a virtual env & activate it. Then install the the requirements with
