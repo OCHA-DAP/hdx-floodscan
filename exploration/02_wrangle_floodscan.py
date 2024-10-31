@@ -74,7 +74,7 @@ ds_historical_baseline = floodscan.historical_doy_baseline(
     da=ds_historical,
     current_year=end_date.year,
     n_baseline_years=10,
-    n_days_smooth=10,
+    n_days_smooth=11,
 )
 
 

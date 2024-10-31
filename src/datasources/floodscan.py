@@ -79,7 +79,7 @@ def process_floodscan_cog(cog_name, mode, container_name):
 
 
 def historical_doy_baseline(
-    da, current_year, n_baseline_years=10, n_days_smooth=10
+    da, current_year, n_baseline_years=10, n_days_smooth=11
 ):
     last_n_years = list(range(current_year - n_baseline_years, current_year))
     da_smooth = da.rolling(time=n_days_smooth, center=True).mean()
