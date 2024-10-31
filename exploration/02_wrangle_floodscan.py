@@ -8,6 +8,10 @@
 #       format_name: percent
 #       format_version: '1.3'
 #       jupytext_version: 1.11.2
+#   kernelspec:
+#     display_name: hdx-floodscan
+#     language: python
+#     name: python3
 # ---
 
 # %% [markdown]
@@ -44,10 +48,17 @@ start_date = end_date - datetime.timedelta(days=3)
 da_current = floodscan.load_floodscan_cogs(
     start_date=start_date, end_date=end_date
 )
+
 ds_current = da_current.to_dataset(dim="band")
+var = ds_current.data_vars
+var_name = list(ds_current.data_vars)[0]
+ds_current.rename_vars({var_name: "SFED"})
+
+ds_current = da_current.to_dataset(dim="band")
+
+bname = list(ds_current.data_vars)[0]
 ds_current_sfed = (
-    ds_current.drop_vars(1)
-    .rename_vars({2: "SFED"})
+    ds_current.rename_vars({bname: "SFED"})
     .rename({"x": "lon", "y": "lat"})
     .rio.set_spatial_dims(x_dim="lon", y_dim="lat")
     .rio.write_crs(4326)

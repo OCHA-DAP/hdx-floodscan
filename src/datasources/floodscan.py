@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import numpy as np
 import rioxarray as rxr
 import xarray as xr
 
@@ -52,8 +53,18 @@ def load_floodscan_cogs(
         da_in = process_floodscan_cog(
             cog_name=cog, container_name="global", mode="dev"
         )
-        das.append(da_in)
+        da_sfed = subset_band(da_in, band="SFED")
+        das.append(da_sfed)
+
     return xr.combine_by_coords(das, combine_attrs="drop")
+
+
+def subset_band(da, band="SFED"):
+    long_name = np.array(da.attrs["long_name"])
+    index_band = np.where(long_name == band)[0] + 1
+    da_subset = da.sel(band=index_band)
+    da_subset.attrs["long_name"] = band
+    return da_subset
 
 
 def process_floodscan_cog(cog_name, mode, container_name):
