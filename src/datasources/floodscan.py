@@ -61,8 +61,8 @@ def load_floodscan_cogs(
 
 def subset_band(da, band="SFED"):
     long_name = np.array(da.attrs["long_name"])
-    index_band = np.where(long_name == band)[0] + 1
-    da_subset = da.sel(band=index_band)
+    index_band = np.where(long_name == band)[0]
+    da_subset = da.isel(band=index_band)
     da_subset.attrs["long_name"] = band
     return da_subset
 
