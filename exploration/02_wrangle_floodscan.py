@@ -50,11 +50,6 @@ da_current = floodscan.load_floodscan_cogs(
 )
 
 ds_current = da_current.to_dataset(dim="band")
-var = ds_current.data_vars
-var_name = list(ds_current.data_vars)[0]
-ds_current.rename_vars({var_name: "SFED"})
-
-ds_current = da_current.to_dataset(dim="band")
 
 bname = list(ds_current.data_vars)[0]
 ds_current_sfed = (
