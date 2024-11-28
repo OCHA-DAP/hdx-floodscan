@@ -3,7 +3,7 @@
 url: "test"
 account: "account"
 container: "container"
-last90_days_filename: "{dir}baseline_v2024-01-31_v05r01.nc4"
+last90_days_filename: "floodscan/daily/v5/raw/baseline_v2024-01-31_v05r01.nc4"
 stats_filename: "20240701_som_floodscan_adm1.xlsx"
 key: "key"
 
