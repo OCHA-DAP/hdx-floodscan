@@ -38,12 +38,12 @@ import pandas as pd
 import xarray as xr
 
 from src.datasources import floodscan
-from src.utils import gen_utils
+from src.utils import date_utils
 
 # %%
 # just a quick utility function to get recent floodscan date that will
 # will be in blob. Only doing a couple days just as proof of concept.
-end_date = gen_utils.date_to_run()
+end_date = date_utils.date_to_run()
 start_date = end_date - datetime.timedelta(days=3)
 da_current = floodscan.load_floodscan_cogs(
     start_date=start_date, end_date=end_date
