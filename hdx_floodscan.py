@@ -182,10 +182,7 @@ class HDXFloodscan:
 
     def _generate_zipped_file(self, last90_days_geotiffs, ds_historical_baseline):
 
-        base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-        geotiffs_dir = Path("geotiffs")
-        new_dir = base_dir / geotiffs_dir
-        new_dir.mkdir(exist_ok=True)
+        os.mkdir("geotiffs")
 
         out_files = []
         for ds_current_sfed in last90_days_geotiffs:
