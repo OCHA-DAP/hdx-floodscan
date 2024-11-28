@@ -9,6 +9,7 @@ TODO
 """
 import logging
 import os
+from pathlib import Path
 from copy import copy
 from datetime import datetime, timezone
 import pandas as pd
@@ -180,7 +181,7 @@ class HDXFloodscan:
 
     def _generate_zipped_file(self, last90_days_geotiffs, ds_historical_baseline):
 
-        os.makedirs('geotiffs', exist_ok=True)
+        Path("geottifs").mkdir(parents=True, exist_ok=True)
 
         out_files = []
         for ds_current_sfed in last90_days_geotiffs:
