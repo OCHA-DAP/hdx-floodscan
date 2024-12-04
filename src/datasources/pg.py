@@ -46,20 +46,20 @@ def get_engine(mode):
 
 
 # this one is experimental - may mess around and see how it works on prod
-def create_yr_max_view(mode):
+def create_yr_max_view(mode, admin_level, band):
     engine = get_engine(mode)
     with engine.connect() as conn:
-        query = """
+        query = f"""
             CREATE OR REPLACE VIEW floodscan_yearly_max AS
             SELECT iso3, pcode, year_date, MAX(mean) AS value
             FROM (
                 SELECT iso3, pcode, adm_level, valid_date, band, mean,
                        DATE_TRUNC('year', valid_date) AS year_date
                 FROM floodscan
-                WHERE adm_level = 2
-                  AND band = 'SFED'
+                WHERE adm_level = {admin_level}
+                  AND band = '{band}'
                   AND valid_date <= '2023-12-31'
             ) AS filtered_floodscan
             GROUP BY iso3, pcode, year_date
-        """
+        """  # noqa E231 E202
         conn.execute(query)
