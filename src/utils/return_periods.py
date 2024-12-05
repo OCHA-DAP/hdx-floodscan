@@ -1,7 +1,108 @@
 import numpy as np
 import pandas as pd
 from lmoments3 import distr, lmom_ratios
+from scipy.interpolate import interp1d
 from scipy.stats import norm, pearson3, skew
+
+# Empirical RP Functions
+
+
+def fs_add_rp(df, df_maxima, by):
+    """
+    Adds return periods (RP) to the given DataFrame based on maxima values.
+    from entire historical record
+
+    Parameters:
+    df (pandas.DataFrame): The DataFrame to which return periods will be added.
+    df_maxima (pandas.DataFrame): The DataFrame containing maxima values
+    from entire historical record - used to calculate return periods.
+    by (str or list of str): Column(s) to group by when calculating
+    return periods.
+
+    Returns:
+    pandas.DataFrame: The original DataFrame with an additional column 'RP'
+    containing the return periods.
+    """
+    df_maxima["RP"] = df_maxima.groupby(by)["value"].transform(empirical_rp)
+
+    interp_funcs = interpolation_functions_by(
+        df=df_maxima, rp="RP", value="value", by=by
+    )
+
+    df["RP"] = df.apply(
+        lambda row: apply_interp(row, interp_funcs, by=by), axis=1
+    ).astype(float)
+
+    df["RP"] = clean_rps(df["RP"], decimals=3, upper=10)
+
+    return df
+
+
+def interpolation_functions_by(df, rp, value, by=["iso3", "pcode"]):
+    """
+    Generate interpolation functions for each group in the DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame containing the data.
+    rp (str): The column name in the DataFrame representing the
+    return period values.
+    value (str): The column name in the DataFrame representing the values
+    to interpolate.
+    by (list of str, optional): The list of column names to group by.
+    Default is ["iso3", "pcode"].
+
+    Returns:
+    dict: A dictionary where keys are tuples of group values and values are
+    interpolation functions.
+    """
+    interp_funcs = (
+        df.groupby(by)
+        .apply(
+            lambda group: interp1d(
+                group[value],
+                group[rp],
+                bounds_error=False,
+                fill_value=(1, np.nan),
+            ),
+            include_groups=False,
+        )
+        .to_dict()
+    )
+
+    return interp_funcs
+
+
+def apply_interp(row, interp_dict, by=["iso3", "pcode"]):
+    try:
+        key = tuple(row[col] for col in by)
+        interp_func = interp_dict[key]
+        return interp_func(row["value"])
+    except KeyError:
+        return np.nan
+
+
+def clean_rps(x, decimals=3, upper=10):
+    x_round = x.round(3)
+    x_round[x_round > upper] = np.inf
+    return x_round
+
+
+def empirical_rp(x):
+    exceedance = exceedance_probability(x)
+    return 1 / exceedance
+
+
+def exceedance_probability(x):
+    x_sorted = np.sort(x)[::-1]
+    x_length = len(x_sorted)
+    rank = np.arange(1, x_length + 1)
+    exceedance_prob = rank / (x_length + 1)
+    orig_order = np.argsort(-x)
+    inv_orig_order = np.argsort(orig_order)
+    return exceedance_prob[inv_orig_order]
+
+
+# LP3 Functions
 
 
 def lp3_params(x, est_method="lmoments"):
