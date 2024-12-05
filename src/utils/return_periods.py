@@ -1,7 +1,72 @@
 import numpy as np
 import pandas as pd
 from lmoments3 import distr, lmom_ratios
+from scipy.interpolate import interp1d
 from scipy.stats import norm, pearson3, skew
+
+
+def fs_add_rp(df, df_maxima, by):
+    df_maxima["RP"] = df_maxima.groupby(by)["value"].transform(empirical_rp)
+
+    interp_funcs = interpolation_functions_by(
+        df=df_maxima, rp="RP", value="value", by=by
+    )
+
+    df["RP"] = df.apply(
+        lambda row: apply_interp(row, interp_funcs, by=by), axis=1
+    ).astype(float)
+
+    df["RP"] = clean_rps(df["RP"], decimals=3, upper=10)
+
+    return df
+
+
+def interpolation_functions_by(df, rp, value, by=["iso3", "pcode"]):
+    interp_funcs = (
+        df.groupby(by)
+        .apply(
+            lambda group: interp1d(
+                group[value],
+                group[rp],
+                bounds_error=False,
+                fill_value=(1, np.nan),
+            ),
+            include_groups=False,
+        )
+        .to_dict()
+    )
+
+    return interp_funcs
+
+
+def apply_interp(row, interp_dict, by=["iso3", "pcode"]):
+    try:
+        key = tuple(row[col] for col in by)
+        interp_func = interp_dict[key]
+        return interp_func(row["value"])
+    except KeyError:
+        return np.nan
+
+
+def clean_rps(x, decimals=3, upper=10):
+    x_round = x.round(3)
+    x_round[x_round > upper] = np.inf
+    return x_round
+
+
+def empirical_rp(x):
+    exceedance = exceedance_probability(x)
+    return 1 / exceedance
+
+
+def exceedance_probability(x):
+    x_sorted = np.sort(x)[::-1]
+    x_length = len(x_sorted)
+    rank = np.arange(1, x_length + 1)
+    exceedance_prob = rank / (x_length + 1)
+    orig_order = np.argsort(-x)
+    inv_orig_order = np.argsort(orig_order)
+    return exceedance_prob[inv_orig_order]
 
 
 def lp3_params(x, est_method="lmoments"):
@@ -126,3 +191,26 @@ def lp3_rv(rp, params, est_method="usgs"):
         ret = 10 ** (value_log)
 
     return ret
+
+    def exclude_zero_or_na_means(df):
+        """
+        Exclude rows where all 'mean' values are zero or NaN for each group of
+        'country_name', 'iso3', and 'pcode'.
+
+        Parameters:
+        df (pd.DataFrame): Input DataFrame with columns 'country_name', 'iso3',
+        'pcode', and 'mean'.
+
+        Returns:
+        pd.DataFrame: DataFrame with excluded rows.
+        """
+        grouped = df.groupby(["country_name", "iso3", "pcode"])
+        filtered = grouped.filter(
+            lambda x: not (x["mean"].eq(0).all() or x["mean"].isna().all())
+        )
+        result = (
+            filtered[["country_name", "iso3", "pcode"]]
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
+        return result

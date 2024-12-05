@@ -10,6 +10,16 @@ AZURE_DB_PW_PROD = os.getenv("AZURE_DB_PW_PROD")
 AZURE_DB_PW_DEV = os.getenv("AZURE_DB_PW_DEV")
 
 
+def get_engine(mode):
+    if mode == "prod":
+        pw = AZURE_DB_PW_PROD
+    else:
+        pw = AZURE_DB_PW_DEV
+
+    url = f"postgresql+psycopg2://chdadmin:{pw}@chd-rasterstats-{mode}.postgres.database.azure.com/postgres"  # noqa: E501 E231
+    return create_engine(url)
+
+
 def fs_year_max(mode, admin_level, band="SFED"):
     engine = get_engine(mode)
 
@@ -21,7 +31,7 @@ def fs_year_max(mode, admin_level, band="SFED"):
           AND valid_date <= '2023-12-31'
         GROUP BY iso3, pcode, year_date
     """
-    pd.read_sql(sql=query_yr_max, con=engine)
+    return pd.read_sql(sql=query_yr_max, con=engine)
 
 
 def fs_last_90_days(mode, admin_level, band="SFED"):
@@ -35,14 +45,6 @@ def fs_last_90_days(mode, admin_level, band="SFED"):
       AND valid_date >= NOW() - INTERVAL '90 days'
     """
     return pd.read_sql(sql=query_last_90_days, con=engine)
-
-
-def get_engine(mode):
-    if mode == "prod":
-        url = f"postgresql+psycopg2://chdadmin:{AZURE_DB_PW_PROD}@chd-rasterstats-prod.postgres.database.azure.com/postgres"  # noqa: E501 E231
-    else:
-        url = f"postgresql+psycopg2://chdadmin:{AZURE_DB_PW_DEV}@chd-rasterstats-dev.postgres.database.azure.com/postgres"  # noqa: E501 E231
-    return create_engine(url)
 
 
 # this one is experimental - may mess around and see how it works on prod
