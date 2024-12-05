@@ -4,8 +4,25 @@ from lmoments3 import distr, lmom_ratios
 from scipy.interpolate import interp1d
 from scipy.stats import norm, pearson3, skew
 
+# Empirical RP Functions
+
 
 def fs_add_rp(df, df_maxima, by):
+    """
+    Adds return periods (RP) to the given DataFrame based on maxima values.
+    from entire historical record
+
+    Parameters:
+    df (pandas.DataFrame): The DataFrame to which return periods will be added.
+    df_maxima (pandas.DataFrame): The DataFrame containing maxima values
+    from entire historical record - used to calculate return periods.
+    by (str or list of str): Column(s) to group by when calculating
+    return periods.
+
+    Returns:
+    pandas.DataFrame: The original DataFrame with an additional column 'RP'
+    containing the return periods.
+    """
     df_maxima["RP"] = df_maxima.groupby(by)["value"].transform(empirical_rp)
 
     interp_funcs = interpolation_functions_by(
@@ -22,6 +39,22 @@ def fs_add_rp(df, df_maxima, by):
 
 
 def interpolation_functions_by(df, rp, value, by=["iso3", "pcode"]):
+    """
+    Generate interpolation functions for each group in the DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame containing the data.
+    rp (str): The column name in the DataFrame representing the
+    return period values.
+    value (str): The column name in the DataFrame representing the values
+    to interpolate.
+    by (list of str, optional): The list of column names to group by.
+    Default is ["iso3", "pcode"].
+
+    Returns:
+    dict: A dictionary where keys are tuples of group values and values are
+    interpolation functions.
+    """
     interp_funcs = (
         df.groupby(by)
         .apply(
@@ -67,6 +100,9 @@ def exceedance_probability(x):
     orig_order = np.argsort(-x)
     inv_orig_order = np.argsort(orig_order)
     return exceedance_prob[inv_orig_order]
+
+
+# LP3 Functions
 
 
 def lp3_params(x, est_method="lmoments"):
@@ -191,26 +227,3 @@ def lp3_rv(rp, params, est_method="usgs"):
         ret = 10 ** (value_log)
 
     return ret
-
-    def exclude_zero_or_na_means(df):
-        """
-        Exclude rows where all 'mean' values are zero or NaN for each group of
-        'country_name', 'iso3', and 'pcode'.
-
-        Parameters:
-        df (pd.DataFrame): Input DataFrame with columns 'country_name', 'iso3',
-        'pcode', and 'mean'.
-
-        Returns:
-        pd.DataFrame: DataFrame with excluded rows.
-        """
-        grouped = df.groupby(["country_name", "iso3", "pcode"])
-        filtered = grouped.filter(
-            lambda x: not (x["mean"].eq(0).all() or x["mean"].isna().all())
-        )
-        result = (
-            filtered[["country_name", "iso3", "pcode"]]
-            .drop_duplicates()
-            .reset_index(drop=True)
-        )
-        return result
