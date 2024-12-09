@@ -14,3 +14,4 @@ scipy==1.14.1
 lmoments3==1.0.7
 pyarrow==17.0.0
 SQLAlchemy==2.0.33
+psycopg2==2.9.10
