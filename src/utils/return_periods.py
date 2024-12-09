@@ -8,34 +8,42 @@ from scipy.stats import norm, pearson3, skew
 
 
 def fs_add_rp(df, df_maxima, by):
-    """
-    Adds return periods (RP) to the given DataFrame based on maxima values.
-    from entire historical record
+    df_nans, df_maxima_nans = [
+        extract_nan_strata(x, by=by) for x in [df, df_maxima]
+    ]
 
-    Parameters:
-    df (pandas.DataFrame): The DataFrame to which return periods will be added.
-    df_maxima (pandas.DataFrame): The DataFrame containing maxima values
-    from entire historical record - used to calculate return periods.
-    by (str or list of str): Column(s) to group by when calculating
-    return periods.
+    df_filt = df[
+        ~df[by].apply(tuple, axis=1).isin(df_nans.apply(tuple, axis=1))
+    ]
+    df_maxima_filt = df_maxima[
+        ~df_maxima[by]
+        .apply(tuple, axis=1)
+        .isin(df_maxima_nans.apply(tuple, axis=1))
+    ]
 
-    Returns:
-    pandas.DataFrame: The original DataFrame with an additional column 'RP'
-    containing the return periods.
-    """
-    df_maxima["RP"] = df_maxima.groupby(by)["value"].transform(empirical_rp)
-
-    interp_funcs = interpolation_functions_by(
-        df=df_maxima, rp="RP", value="value", by=by
+    df_rps = (
+        df_maxima_filt.groupby(by, group_keys=True)
+        .apply(empirical_rp, include_groups=False)
+        .reset_index()
+        .drop(columns=["level_2"])
     )
 
-    df["RP"] = df.apply(
-        lambda row: apply_interp(row, interp_funcs, by=by), axis=1
+    interp_funcs = interpolation_functions_by(
+        df=df_rps, rp="RP", value="value", by=by
+    )
+
+    df_filt.loc[:, "RP"] = df_filt.apply(
+        lambda row: apply_interp(row, interp_funcs, by=by),
+        axis=1,
     ).astype(float)
 
-    df["RP"] = clean_rps(df["RP"], decimals=3, upper=10)
+    df_filt.loc[:, "RP"] = clean_rps(df_filt["RP"], decimals=3, upper=10)
 
-    return df
+    return df_filt
+
+
+def extract_nan_strata(df, by=["iso3", "pcode"]):
+    return df[df["value"].isna()][by].drop_duplicates()
 
 
 def interpolation_functions_by(df, rp, value, by=["iso3", "pcode"]):
@@ -87,19 +95,13 @@ def clean_rps(x, decimals=3, upper=10):
     return x_round
 
 
-def empirical_rp(x):
-    exceedance = exceedance_probability(x)
-    return 1 / exceedance
+def empirical_rp(group):
+    if group["value"].isna().any():
+        raise ValueError("The value column contains NaN values")
 
-
-def exceedance_probability(x):
-    x_sorted = np.sort(x)[::-1]
-    x_length = len(x_sorted)
-    rank = np.arange(1, x_length + 1)
-    exceedance_prob = rank / (x_length + 1)
-    orig_order = np.argsort(-x)
-    inv_orig_order = np.argsort(orig_order)
-    return exceedance_prob[inv_orig_order]
+    group["RANK"] = group["value"].rank(ascending=False)
+    group["RP"] = (len(group) + 1) / group["RANK"]
+    return group
 
 
 # LP3 Functions
