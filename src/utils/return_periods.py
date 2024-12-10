@@ -1,7 +1,110 @@
 import numpy as np
 import pandas as pd
 from lmoments3 import distr, lmom_ratios
+from scipy.interpolate import interp1d
 from scipy.stats import norm, pearson3, skew
+
+# Empirical RP Functions
+
+
+def fs_add_rp(df, df_maxima, by):
+    df_nans, df_maxima_nans = [
+        extract_nan_strata(x, by=by) for x in [df, df_maxima]
+    ]
+
+    df_filt = df[
+        ~df[by].apply(tuple, axis=1).isin(df_nans.apply(tuple, axis=1))
+    ].copy()
+    df_maxima_filt = df_maxima[
+        ~df_maxima[by]
+        .apply(tuple, axis=1)
+        .isin(df_maxima_nans.apply(tuple, axis=1))
+    ].copy()
+
+    df_rps = (
+        df_maxima_filt.groupby(by, group_keys=True)
+        .apply(empirical_rp, include_groups=False)
+        .reset_index()
+        .drop(columns=["level_2"])
+    )
+
+    interp_funcs = interpolation_functions_by(
+        df=df_rps, rp="RP", value="value", by=by
+    )
+
+    df_filt.loc[:, "RP"] = df_filt.apply(
+        lambda row: apply_interp(row, interp_funcs, by=by),
+        axis=1,
+    ).astype(float)
+
+    df_filt.loc[:, "RP"] = clean_rps(df_filt["RP"], decimals=3, upper=10)
+
+    return df_filt
+
+
+def extract_nan_strata(df, by=["iso3", "pcode"]):
+    return df[df["value"].isna()][by].drop_duplicates()
+
+
+def interpolation_functions_by(df, rp, value, by=["iso3", "pcode"]):
+    """
+    Generate interpolation functions for each group in the DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame containing the data.
+    rp (str): The column name in the DataFrame representing the
+    return period values.
+    value (str): The column name in the DataFrame representing the values
+    to interpolate.
+    by (list of str, optional): The list of column names to group by.
+    Default is ["iso3", "pcode"].
+
+    Returns:
+    dict: A dictionary where keys are tuples of group values and values are
+    interpolation functions.
+    """
+    interp_funcs = (
+        df.groupby(by)
+        .apply(
+            lambda group: interp1d(
+                group[value],
+                group[rp],
+                bounds_error=False,
+                fill_value=(1, np.nan),
+            ),
+            include_groups=False,
+        )
+        .to_dict()
+    )
+
+    return interp_funcs
+
+
+def apply_interp(row, interp_dict, by=["iso3", "pcode"]):
+    try:
+        key = tuple(row[col] for col in by)
+        interp_func = interp_dict[key]
+        return interp_func(row["value"])
+    except KeyError:
+        return np.nan
+
+
+def clean_rps(x, decimals=3, upper=10):
+    x_round = x.round(3)
+    x_round[x_round > upper] = np.inf
+    return x_round
+
+
+def empirical_rp(group):
+    if group["value"].isna().any():
+        raise ValueError("The value column contains NaN values")
+
+    group["RANK"] = group["value"].rank(ascending=False)
+    group["RP"] = (len(group) + 1) / group["RANK"]
+    return group
+
+
+# LP3 Functions
 
 
 def lp3_params(x, est_method="lmoments"):
