@@ -34,6 +34,35 @@ def fs_year_max(mode, admin_level, band="SFED"):
     return pd.read_sql(sql=query_yr_max, con=engine)
 
 
+def fs_rolling_11_day_mean(mode, admin_level, band="SFED"):
+    engine = get_engine(mode)
+
+    query_rolling_mean = f"""
+        WITH filtered_data AS (
+            SELECT iso3, pcode, valid_date, mean
+            FROM floodscan
+            WHERE adm_level = {admin_level}
+                AND band = '{band}'
+                AND valid_date >= DATE_TRUNC('year', NOW()) - INTERVAL '10 years'
+                AND valid_date < DATE_TRUNC('year', NOW())
+        ),
+        rolling_mean AS (
+            SELECT iso3, pcode, valid_date,
+                    AVG(mean) OVER (PARTITION BY iso3, pcode ORDER BY valid_date
+                                    ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) AS rolling_mean
+            FROM filtered_data
+        ),
+        doy_mean AS (
+            SELECT iso3, pcode, EXTRACT(DOY FROM valid_date) AS doy,
+                    AVG(rolling_mean) AS SFED_BASELINE
+            FROM rolling_mean
+            GROUP BY iso3, pcode, doy
+        )
+        SELECT * FROM doy_mean
+    """  # noqa: E202 E231
+    return pd.read_sql(sql=query_rolling_mean, con=engine)
+
+
 def fs_last_90_days(mode, admin_level, band="SFED"):
     engine = get_engine(mode)
 
