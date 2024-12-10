@@ -14,12 +14,12 @@ def fs_add_rp(df, df_maxima, by):
 
     df_filt = df[
         ~df[by].apply(tuple, axis=1).isin(df_nans.apply(tuple, axis=1))
-    ]
+    ].copy()
     df_maxima_filt = df_maxima[
         ~df_maxima[by]
         .apply(tuple, axis=1)
         .isin(df_maxima_nans.apply(tuple, axis=1))
-    ]
+    ].copy()
 
     df_rps = (
         df_maxima_filt.groupby(by, group_keys=True)
