@@ -14,13 +14,18 @@
 #     name: hdx-floodscan
 # ---
 
-import pandas as pd
-
 # %%
 # %matplotlib inline
 # %load_ext autoreload
 # %autoreload 2
-from src.utils import pg
+
+from io import BytesIO
+
+# %%
+import pandas as pd
+
+from src.utils import cloud_utils as blob
+from src.utils import pg  # postgres
 
 # %% [markdown]
 # The final data sets will need to be labelled with both admin codes and admin
@@ -42,6 +47,8 @@ from src.utils import pg
 # 2. Show the joins generally necessary to label the data
 # 3. highlight some other issues in the DB that have been raised as issues,
 # but affect this step specifically.
+# 4. and finally highlight the work-around that will use a `parquet` file
+# stored on the blob to implement the hdx-floodscan tabular labelling.
 # %%
 
 
@@ -80,4 +87,62 @@ df_adm2_labelled
 df_no_match = df_adm2_labelled[df_adm2_labelled["name"].isna()]
 iso3_pcodes_no_match = df_no_match[["iso3", "pcode"]].drop_duplicates()
 iso3_pcodes_no_match
+# %% [markdown]
+# Ok we recently generated a work-around using parquet see
+# [PR here](https://github.com/OCHA-DAP/ds-raster-stats/pull/34)
+
 # %%
+pc = blob.get_container_client(mode="dev", container_name="polygon")
+blob_name = "admin_lookup.parquet"
+blob_client = pc.get_blob_client(blob_name)
+blob_data = blob_client.download_blob().readall()
+df_parquet_labels = pd.read_parquet(BytesIO(blob_data))
+
+# %%
+df_labels_adm2 = df_parquet_labels[df_parquet_labels.ADM_LEVEL == 2]
+
+df_fs_labelled = pd.merge(
+    df_adm2_90d,
+    df_labels_adm2,
+    left_on=["iso3", "pcode"],
+    right_on=["ISO3", "ADM2_PCODE"],
+    how="left",
+)
+cols_subset = [
+    "iso3",
+    "ADM0_PCODE",
+    "ADM0_NAME",
+    "ADM1_PCODE",
+    "ADM1_NAME",
+    "ADM2_PCODE",
+    "ADM2_NAME",
+    "valid_date",
+    "value",
+]
+
+df_fs_labelled_subset = df_fs_labelled[cols_subset]
+
+# %% [markdown]
+# Check below shows that the join worked with no missing admin strata
+
+# %%
+df_no_match = df_fs_labelled_subset[df_fs_labelled_subset["ADM2_PCODE"].isna()]
+
+df_no_match
+
+# %% [markdown]
+# I don't have contextual knowledge to check all the admin names, but we can
+# quickly look at country level.  I'd say some of these labels while perhaps
+# standard by some measurement are not ideal. I'd say we can remove the
+# `"(le)$"` and `"(the)$"`  stings as part of the hdx pipeline.
+
+# %%
+# Count the number of records per Country_Name
+df_country_n = (
+    df_fs_labelled_subset.groupby("ADM0_NAME")
+    .size()
+    .reset_index(name="counts")
+)
+
+# Display the result
+df_country_n
