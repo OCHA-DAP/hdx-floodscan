@@ -19,9 +19,9 @@
 # %load_ext autoreload
 # %autoreload 2
 
+# %%
 import numpy as np
 
-# %%
 from src.utils import pg
 from src.utils import return_periods as rp
 
@@ -46,3 +46,14 @@ rp.extract_nan_strata(df_current, by=["iso3", "pcode"])
 max_rp = df_w_rps["RP"].max()
 max_rp = df_w_rps[df_w_rps["RP"] != np.inf]["RP"].max()
 print(max_rp)
+
+# %% [markdown]
+# Good no longer any NA/NAN values being produced and instead they are
+# correctly set as `Inf`
+#
+
+# %%
+df_w_rps[df_w_rps.RP.isna()]
+
+# %%
+df_w_rps[np.isinf(df_w_rps["RP"])]
