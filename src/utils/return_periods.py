@@ -37,7 +37,10 @@ def fs_add_rp(df, df_maxima, by):
         axis=1,
     ).astype(float)
 
-    df_filt.loc[:, "RP"] = clean_rps(df_filt["RP"], decimals=3, upper=10)
+    df_filt.loc[:, "RP"] = df_filt["RP"].astype(float)
+    df_filt.loc[:, "RP_class"] = reclassify_rp(df_filt["RP"])
+    df_filt = df_filt.drop(columns=["RP"])
+    df_filt = df_filt.rename(columns={"RP_class": "RP"})
 
     return df_filt
 
@@ -89,10 +92,12 @@ def apply_interp(row, interp_dict, by=["iso3", "pcode"]):
         return np.nan
 
 
-def clean_rps(x, decimals=3, upper=10):
-    x_round = x.round(3)
-    x_round[x_round > upper] = np.inf
-    return x_round
+def reclassify_rp(x):
+    # start bins below lowest values so we can set right = True which
+    # by default makes left = False. Otherwise 1 turns to NaN
+    bins = [0.9, 1.5, 2, 3, 4, 5, 7, 10, np.inf]
+    labels = ["1-1.5", "1.5-2", "2-3", "3-4", "4-5", "5-7", "7-10", ">10"]
+    return pd.cut(x, bins=bins, labels=labels, right=True)
 
 
 def empirical_rp(group):

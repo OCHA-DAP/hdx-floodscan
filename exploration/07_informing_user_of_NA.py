@@ -36,9 +36,10 @@
 # to provide this notebook so that we can see the extent of the problem and
 # refer to it there.
 
-import pandas as pd
 
 # %%
+import pandas as pd
+
 from src.utils import pg
 from src.utils import return_periods as rp
 
@@ -102,4 +103,11 @@ df_sfed_missing
 
 # %%
 df_w_rps_complete = pd.concat([df_w_rps, df_sfed_missing], ignore_index=True)
-df_w_rps_complete
+
+
+# %% [markdown]
+# make sure the classification counts make sense
+
+# %%
+rp_class_counts = df_w_rps_complete["RP"].value_counts(dropna=False)
+rp_class_counts
