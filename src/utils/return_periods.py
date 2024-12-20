@@ -70,7 +70,7 @@ def interpolation_functions_by(df, rp, value, by=["iso3", "pcode"]):
                 group[value],
                 group[rp],
                 bounds_error=False,
-                fill_value=(1, np.nan),
+                fill_value=(1, np.inf),
             ),
             include_groups=False,
         )
