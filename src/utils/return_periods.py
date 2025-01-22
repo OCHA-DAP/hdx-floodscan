@@ -107,9 +107,9 @@ def empirical_rp(group):
         drop=True
     )
     group["RANK"] = group["value"].rank(
-        method="min", ascending=False
+        method="max", ascending=False
     )  # Ties get the same rank (minimum rank)
-    group["RP"] = len(group) / group["RANK"]
+    group["RP"] = (len(group) + 1) / group["RANK"]
     return group
 
 
