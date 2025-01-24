@@ -101,17 +101,19 @@ def reclassify_rp(x):
 
 
 def empirical_rp(group):
-    if group["value"].isna().any():
+    if group["value"].isnull().any():
         raise ValueError("The value column contains NaN values")
-
-    group["RANK"] = group["value"].rank(ascending=False)
+    group = group.sort_values(by="value", ascending=False).reset_index(
+        drop=True
+    )
+    group["RANK"] = group["value"].rank(
+        method="max", ascending=False
+    )  # Ties get the same rank (minimum rank)
     group["RP"] = (len(group) + 1) / group["RANK"]
     return group
 
 
 # LP3 Functions
-
-
 def lp3_params(x, est_method="lmoments"):
     x = np.asarray(x)
     x[x == 0] = np.min(x[x != 0])
