@@ -3,11 +3,11 @@
 url: "test"
 account: "account"
 container: "container"
-last90_days_filename: "floodscan/daily/v5/raw/baseline_v2024-01-31_v05r01.nc4"
 key: "key"
+baseline_filename: "floodscan/daily/v5/raw/baseline_v2025-01-01_v05r01.nc4"
 
 dataset_names:
-  HDX-FLOODSCAN: "hdx-floodscan-test"
+  HDX-FLOODSCAN: "floodscan"
 
 allowed_tags:
   - "climate hazards"
@@ -17,23 +17,16 @@ allowed_tags:
   - "flooding"
 
 # Metadata
-title: "HDX FloodScan"
+title: "FloodScan"
 update_frequency: "daily"
 maintainer_id: "2f9fd160-2a16-49c0-89d6-0bc3230599bf"
-organization_id: "hdx"
-description_90days_file: "Daily zip file containing previous 90 days of raster both SFED and SFED baseline bands."
-description_stats_file: "Excel file containing date, admin metadata, raw SFED mean values (per admin 2), and equivalent approximate calculated return period."
-notes: "Tabular Admin 2: \n
-A daily dataset providing average FloodScan Standard Flood Extent Depiction (SFED) flood fraction (0-100%) per admin 2 
-level. Historical baseline values (SFED_BASELINE) are calculated per day-of-year from the last 10 years of historical 
-data (non-inclusive of current year) after applying an 11 day smoothing mean window. Return Period (RP) is calculated 
-empirically based on all historical data up to the current year (non-inclusive).\n
-\n
-
-Raster Data\n
-Zipped Cloud Optimized Geotifs (COGs) containing AER FloodScan estimated daily flood fraction (0-100%) gridded data at 
-approximately 10 km resolution (0.083 degrees) for the last 90 days. These data are provided as an aggregated version of
- FloodScan’s higher resolution data set. Each COG represents the estimates for a single day and includes 2 bands: SFED 
- (Standard Flood Event Depiction) and SFED_BASELINE. The baseline band provides users an easy way to compare current 
- values with historical averages. The baseline is calculated per day-of-year from the last 10 years of historical data 
- (non-inclusive of current year) after applying an 11 day temporal smoothing mean window."
+organization_id: "53acf7a0-29d5-453d-82ab-20daa6645128"
+90days_filename: "aer_floodscan_300s_SFED_90d.zip"
+stats_filename: "hdx_floodscan_zonal_stats.xlsx"
+description_90days_file: "Daily zip file containing previous 90 days of raster data with both SFED and SFED baseline bands."
+description_stats_file: "Daily Excel file containing date, admin metadata, raw SFED mean values (per admin 1 and 2), the approximate calculated return period and the baseline value calculated from the past 10 years of data."
+notes: "FloodScan uses satellite data to map and monitor floods daily, helping compare current flood conditions with historical averages. This dataset contains two resources:
+\n\n
+The first (hdx_floodscan_zonal_stats.xlsx) is a daily tabular dataset providing average FloodScan Standard Flood Extent Depiction (SFED) flood fraction (0-100%) per admin 1  and 2 level. Historical baseline values (SFED_BASELINE) are calculated per day-of-year from the last 10 years of historical data (non-inclusive of current year) after applying an 11 day smoothing mean window. Return Period (RP) is calculated empirically based on all historical data up to the current year (non-inclusive).
+\n\n
+The second resource (aer_floodscan_300s_SFED_90d.zip) is a zipped file containing AER FloodScan estimated daily flood fraction (0-100%) gridded data at approximately 10 km resolution (300 arcseconds equivalent to approximately 0.083 degrees) for the last 90 days. Each file represents the estimates for a single day and includes 2 bands: SFED and SFED_BASELINE. The baseline band provides users an easy way to compare current values with historical averages. The baseline is calculated per day-of-year from the last 10 years of historical data (non-inclusive of current year) after applying an 11 day temporal smoothing mean window."

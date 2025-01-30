@@ -1,15 +1,16 @@
 license_id: "cc-by-igo"
 methodology: "
-1. Raster \n
-- a. Daily FloodScan SFED(flood fraction) band obtained directly from AER.\n
-- b. Daily historical SFED  band smoothed with 11 day centered rolling mean (+/-5 days).\n
-- c. Average day-of-year (DOY) raster calculated using last  10 years of smoothed data (2013-2023) to create SFED Baseline band\n
-- d. SFED & SFED Baseline band merged per day.\n
-- e. Last 90 days of merged SFED + SFED Baseline bands zipped\n
+Raster \n
+\n- Daily FloodScan SFED(flood fraction) band obtained directly from AER.\n
+\n- Daily historical SFED  band smoothed with 11 day centered rolling mean (+/-5 days).\n
+\n- Average day-of-year (DOY) raster calculated using last  10 years of smoothed data (2013-2023) to create SFED Baseline band\n
+\n- SFED & SFED Baseline band merged per day.\n
+\n- Last 90 days of merged SFED + SFED Baseline bands zipped\n
 \n
-2. Tabular \n
--a. Daily zonal stats (mean) for all historical SFED data 1998-01-01 - 2023-12-31 for each Admin 2 covered by FloodScan extent\n
--b. Return periods calculated form zonal mean data per admin 2 using the Log III Pearson distribution."
-dataset_source: "AER FloodScan: Atmospheric and Environmental Research (AER). Modified and Simplified by UN OCHA"
+Tabular \n
+\n- Daily zonal stats (mean) for all historical SFED data 1998-01-01 - 2023-12-31 for each Admin 2 covered by FloodScan extent\n
+\n- Return periods calculated form zonal mean data per admin 2 using the Log III Pearson distribution."
+dataset_source: "AER FloodScan: Atmospheric and Environmental Research (AER)."
 package_creator: "isabelle-tot"
 private: False
+caveats: "Modified and Simplified by UN OCHA"

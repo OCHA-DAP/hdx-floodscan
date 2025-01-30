@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from io import BytesIO
 
 from azure.core.exceptions import ResourceNotFoundError
@@ -101,7 +101,9 @@ def download_from_azure(
         with open(local_file_path, "wb") as download_file:
             download_file.write(blob_client.download_blob().readall())
 
-        logger.info(f"Successfully downloaded blob {blob_path} to {local_file_path}")
+        logger.info(
+            f"Successfully downloaded blob {blob_path} to {local_file_path}"
+        )
         return True
 
     except ResourceNotFoundError:
@@ -109,5 +111,7 @@ def download_from_azure(
         return False
 
     except Exception as e:
-        logger.error(f"An error occurred while downloading {blob_path}: {str(e)}")
+        logger.error(
+            f"An error occurred while downloading {blob_path}: {str(e)}"
+        )
         return False

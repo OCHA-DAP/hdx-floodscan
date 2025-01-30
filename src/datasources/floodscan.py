@@ -7,7 +7,6 @@ import xarray as xr
 
 from src.utils import cloud_utils, cog_utils, date_utils
 
-
 DATA_DIR_GDRIVE = Path(os.getenv("AA_DATA_DIR_NEW"))
 FP_FS_HISTORICAL = (
     DATA_DIR_GDRIVE

@@ -1,5 +1,4 @@
 import argparse
-
 import re
 from datetime import datetime, timedelta
 from zipfile import ZipFile
@@ -18,6 +17,7 @@ def date_to_run(date=None):
     else:
         ret = datetime.today() - timedelta(days=5)  # .date()
     return ret
+
 
 def create_date_range(days, last_date):
     """
@@ -51,11 +51,16 @@ def get_start_and_last_date_from_90_days_file(zipped_file):
         oldest = min(filenames)
         end_date_str = re.search(search_str, newest)
         start_date_str = re.search(search_str, oldest)
-        return datetime.strptime(start_date_str[0], "%Y%m%d"), datetime.strptime(end_date_str[0], "%Y%m%d")
+        return datetime.strptime(
+            start_date_str[0], "%Y%m%d"
+        ), datetime.strptime(end_date_str[0], "%Y%m%d")
+
 
 def get_start_and_last_date_from_90_days(files):
     search_str = "([0-9]{4}[0-9]{2}[0-9]{2})"
     end_date_str = re.search(search_str, max(files))
     start_date_str = re.search(search_str, min(files))
 
-    return datetime.strptime(start_date_str[0], "%Y%m%d"), datetime.strptime(end_date_str[0], "%Y%m%d")
+    return datetime.strptime(start_date_str[0], "%Y%m%d"), datetime.strptime(
+        end_date_str[0], "%Y%m%d"
+    )
