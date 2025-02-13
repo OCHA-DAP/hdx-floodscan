@@ -5,9 +5,7 @@ import numpy as np
 import rioxarray as rxr
 import xarray as xr
 
-from src.utils import cloud_utils, cog_utils, gen_utils
-
-# from src.utils import blob
+from src.utils import cloud_utils, cog_utils, date_utils
 
 DATA_DIR_GDRIVE = Path(os.getenv("AA_DATA_DIR_NEW"))
 FP_FS_HISTORICAL = (
@@ -44,7 +42,7 @@ def load_floodscan_cogs(
     cogs_list = [
         x.name
         for x in container_client.list_blobs(name_starts_with=prefix)
-        if (gen_utils.extract_date(x.name).date() >= start_date)
+        if (date_utils.extract_date(x.name).date() >= start_date)
         & (gen_utils.extract_date(x.name).date() <= end_date)  # noqa
     ]
 
@@ -72,7 +70,7 @@ def process_floodscan_cog(cog_name, mode, container_name):
         cog_name=cog_name, mode=mode, container_name=container_name
     )
     da_in = rxr.open_rasterio(url_str_tmp, chunks="auto")
-    da_in["date"] = gen_utils.extract_date(url_str_tmp)
+    da_in["date"] = date_utils.extract_date(url_str_tmp)
     da_in = da_in.expand_dims(["date"])
     da_in = da_in.persist()
     return da_in

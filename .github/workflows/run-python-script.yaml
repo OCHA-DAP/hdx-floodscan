@@ -1,0 +1,52 @@
+# This workflow will install Python dependencies and run the script
+
+name: Run script
+
+on:
+  workflow_dispatch: # add run button in github
+  repository_dispatch:
+    types:
+      - webhook
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.x
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: Run script
+      env:
+        HDX_SITE: ${{ secrets.HDX_SITE }}
+        HDX_KEY: ${{ secrets.HDX_BOT_SCRAPERS_API_TOKEN }}
+        PREPREFIX: ${{ secrets.PREPREFIX }}
+        USER_AGENT: ${{ secrets.USER_AGENT }}
+        BLOB_URL: ${{ secrets.BLOB_URL }}
+        STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
+        CONTAINER: ${{ secrets.CONTAINER }}
+        BLOB: ${{ secrets.BLOB }}
+        KEY: ${{ secrets.KEY }}
+        AZURE_DB_PW_DEV: ${{ secrets.DS_AZ_DB_DEV_UID }}
+        AZURE_DB_PW_PROD: ${{ secrets.DS_AZ_DB_PROD_UID }}
+      run: |
+        python run.py
+    - name: Send mail
+      if: failure()
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{secrets.EMAIL_SERVER}}
+        server_port: ${{secrets.EMAIL_PORT}}
+        username: ${{secrets.EMAIL_USERNAME}}
+        password: ${{secrets.EMAIL_PASSWORD}}
+        subject: "FAILED: ${{github.repository}} run job"
+        body: GitHub Actions run job for ${{github.repository}} failed!
+        to: ${{secrets.EMAIL_LIST}}
+        from: ${{secrets.EMAIL_FROM}}
+        content_type: text/html
