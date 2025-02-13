@@ -286,10 +286,16 @@ class Floodscan:
 
     def _get_latest_90_days_geotiffs(self, account, container, key):
         das = {}
+
+        try:
+            container = os.environ["CONTAINER"]
+        except Exception:
+            container = self.configuration["container"]
+
         existing_files = [
             x.name
             for x in self.blob_client()
-            .get_container_client(self.configuration["container"])
+            .get_container_client(container)
             .list_blobs(
                 name_starts_with="floodscan/daily/v5/processed/aer_area"
             )
