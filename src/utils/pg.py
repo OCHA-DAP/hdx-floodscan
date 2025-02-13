@@ -34,8 +34,14 @@ def fs_year_max(mode, admin_level, band="SFED"):
     return pd.read_sql(sql=query_yr_max, con=engine)
 
 
-def fs_rolling_11_day_mean(mode, admin_level, band="SFED"):
+def fs_rolling_11_day_mean(mode, admin_level, band="SFED", only_HRP=False):
     engine = get_engine(mode)
+
+    only_HRP_clause = (
+        f" AND iso3 IN (SELECT iso3 FROM iso3 WHERE has_active_hrp=true)"
+        if only_HRP
+        else None
+    )
 
     query_rolling_mean = f"""
         WITH filtered_data AS (
@@ -44,7 +50,7 @@ def fs_rolling_11_day_mean(mode, admin_level, band="SFED"):
             WHERE adm_level = {admin_level}
                 AND band = '{band}'
                 AND valid_date >= DATE_TRUNC('year', NOW()) - INTERVAL '10 years'
-                AND valid_date < DATE_TRUNC('year', NOW())
+                AND valid_date < DATE_TRUNC('year', NOW()) {only_HRP_clause}
         ),
         rolling_mean AS (
             SELECT iso3, pcode, valid_date,
@@ -60,10 +66,11 @@ def fs_rolling_11_day_mean(mode, admin_level, band="SFED"):
         )
         SELECT * FROM doy_mean
     """  # noqa: E202 E231
+
     return pd.read_sql(sql=query_rolling_mean, con=engine)
 
 
-def fs_last_90_days(mode, admin_level, band="SFED"):
+def fs_last_90_days(mode, admin_level, band="SFED", only_HRP=False):
     engine = get_engine(mode)
 
     query_last_90_days = f"""
@@ -73,6 +80,10 @@ def fs_last_90_days(mode, admin_level, band="SFED"):
       AND band = '{band}'
       AND valid_date >= NOW() - INTERVAL '90 days'
     """
+    if only_HRP:
+        query_last_90_days += (
+            f" AND iso3 IN (SELECT iso3 FROM iso3 WHERE has_active_hrp=true)"
+        )
     return pd.read_sql(sql=query_last_90_days, con=engine)
 
 
