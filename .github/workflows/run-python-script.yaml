@@ -35,6 +35,7 @@ jobs:
         KEY: ${{ secrets.KEY }}
         AZURE_DB_PW_DEV: ${{ secrets.DS_AZ_DB_DEV_UID }}
         AZURE_DB_PW_PROD: ${{ secrets.DS_AZ_DB_PROD_UID }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
         python run.py
     - name: Send mail
