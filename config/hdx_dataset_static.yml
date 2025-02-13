@@ -1,5 +1,6 @@
 license_id: "cc-by-igo"
-methodology: "
+methodology: Other
+methodology_other: "
 Raster \n
 \n- Daily FloodScan SFED(flood fraction) band obtained directly from AER.\n
 \n- Daily historical SFED  band smoothed with 11 day centered rolling mean (+/-5 days).\n

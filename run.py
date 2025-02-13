@@ -22,8 +22,6 @@ from hdx.utilities.retriever import Retrieve
 
 from floodscan import Floodscan
 
-"""Facade to simplify project setup that calls project main function with kwargs"""
-
 from typing import Any, Callable, Optional  # noqa: F401
 
 from hdx.api.configuration import Configuration
