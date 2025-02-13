@@ -26,12 +26,11 @@ jobs:
       env:
         HDX_SITE: ${{ secrets.HDX_SITE }}
         HDX_KEY: ${{ secrets.HDX_BOT_SCRAPERS_API_TOKEN }}
-        PREPREFIX: ${{ secrets.PREPREFIX }}
+        PREPREFIX: ${{ secrets.HDX_PIPELINE_PREPREFIX }}
         USER_AGENT: ${{ secrets.USER_AGENT }}
         BLOB_URL: ${{ secrets.BLOB_URL }}
         STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
         CONTAINER: ${{ secrets.CONTAINER }}
-        BLOB: ${{ secrets.BLOB }}
         KEY: ${{ secrets.KEY }}
         AZURE_DB_PW_DEV: ${{ secrets.DS_AZ_DB_DEV_UID }}
         AZURE_DB_PW_PROD: ${{ secrets.DS_AZ_DB_PROD_UID }}
@@ -42,12 +41,12 @@ jobs:
       if: failure()
       uses: dawidd6/action-send-mail@v3
       with:
-        server_address: ${{secrets.EMAIL_SERVER}}
-        server_port: ${{secrets.EMAIL_PORT}}
-        username: ${{secrets.EMAIL_USERNAME}}
-        password: ${{secrets.EMAIL_PASSWORD}}
+        server_address: ${{secrets.HDX_PIPELINE_EMAIL_SERVER}}
+        server_port: ${{secrets.HDX_PIPELINE_EMAIL_PORT}}
+        username: ${{secrets.HDX_PIPELINE_EMAIL_USERNAME}}
+        password: ${{secrets.HDX_PIPELINE_EMAIL_PASSWORD}}
         subject: "FAILED: ${{github.repository}} run job"
         body: GitHub Actions run job for ${{github.repository}} failed!
-        to: ${{secrets.EMAIL_LIST}}
-        from: ${{secrets.EMAIL_FROM}}
+        to: ${{secrets.HDX_EMAIL_LIST}}
+        from: ${{secrets.HDX_PIPELINE_EMAIL_FROM}}
         content_type: text/html
