@@ -279,18 +279,17 @@ class Floodscan:
         return da_subset
 
     def blob_client(self):
-        key = self.configuration["key"]
-        storage_account = self.configuration["account"]
-        account_url = f"https://{storage_account}.blob.core.windows.net"
+        try:
+            account = os.environ["STORAGE_ACCOUNT"]
+            key = os.environ["KEY"]
+        except Exception:
+            account = self.configuration["account"]
+            key = self.configuration["key"]
+        account_url = f"https://{account}.blob.core.windows.net"
         return BlobServiceClient(account_url=account_url, credential=key)
 
     def _get_latest_90_days_geotiffs(self, account, container, key):
         das = {}
-
-        try:
-            container = os.environ["CONTAINER"]
-        except Exception:
-            container = self.configuration["container"]
 
         existing_files = [
             x.name
