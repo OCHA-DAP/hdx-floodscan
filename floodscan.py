@@ -309,28 +309,15 @@ class Floodscan:
         for date in dates:
             blob = f"floodscan/daily/v5/processed/aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
 
-            if not os.path.isfile(blob):
-                try:
-                    geotiff_file_for_date = self.retriever.download_file(
-                        url=blob,
-                        account=account,
-                        container=container,
-                        key=key,
-                        blob=blob,
-                    )
+            geotiff_file_for_date = self.retriever.download_file(
+                url=blob,
+                account=account,
+                container=container,
+                key=key,
+                blob=blob,
+            )
 
-                    # TODO add back for local run
-                    """
-                    shutil.move(geotiff_file_for_date, blob)
-                    logger.info(
-                        f"Moving downloaded blob {blob} to the cached folder."
-                    )
-                    """
-                except Exception as e:
-                    logger.error(f"Missing geotiff {blob}: {e}")
-                    return None
-
-            da_in = rxr.open_rasterio(blob, chunks="auto")
+            da_in = rxr.open_rasterio(geotiff_file_for_date, chunks="auto")
             das[date] = da_in.sel({"band": 1}, drop=True)
 
         return das
