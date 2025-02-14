@@ -299,7 +299,6 @@ class Floodscan:
                 name_starts_with="floodscan/daily/v5/processed/aer_area"
             )
         ]
-        logger.info(existing_files)
 
         latest_available_file = sorted(existing_files)[-1]
         search_str = "([0-9]{4}-[0-9]{2}-[0-9]{2})"
@@ -319,10 +318,14 @@ class Floodscan:
                         key=key,
                         blob=blob,
                     )
+
+                    # TODO add back for local run
+                    """
                     shutil.move(geotiff_file_for_date, blob)
                     logger.info(
                         f"Moving downloaded blob {blob} to the cached folder."
                     )
+                    """
                 except Exception as e:
                     logger.error(f"Missing geotiff {blob}: {e}")
                     return None
