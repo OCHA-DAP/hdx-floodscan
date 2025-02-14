@@ -299,6 +299,7 @@ class Floodscan:
                 name_starts_with="floodscan/daily/v5/processed/aer_area"
             )
         ]
+        logger.info(existing_files)
 
         latest_available_file = sorted(existing_files)[-1]
         search_str = "([0-9]{4}-[0-9]{2}-[0-9]{2})"
