@@ -48,23 +48,24 @@ class Floodscan:
         self.start_date = None
         self.latest_date = None
 
-    def get_data(self):
         try:
-            account = os.environ["STORAGE_ACCOUNT"]
-            container = os.environ["CONTAINER"]
-            key = os.environ["KEY"]
+            self.account = os.environ["STORAGE_ACCOUNT"]
+            self.container = os.environ["CONTAINER"]
+            self.key = os.environ["KEY"]
         except Exception:
-            account = self.configuration["account"]
-            container = self.configuration["container"]
-            key = self.configuration["key"]
+            self.account = self.configuration["account"]
+            self.container = self.configuration["container"]
+            self.key = self.configuration["key"]
+
+    def get_data(self):
 
         dataset_name = self.configuration["dataset_names"]["HDX-FLOODSCAN"]
 
         last90_days_files = self._get_latest_90_days_geotiffs(
-            account, container, key
+            self.account, self.container, self.key
         )
         historical_baseline = self._get_historical_baseline(
-            account, container, key
+            self.account, self.container, self.key
         )
         last90_days_file = self._generate_zipped_file(
             last90_days_files, historical_baseline
@@ -114,9 +115,9 @@ class Floodscan:
     def get_adm2_labels(self, df_adm2_90d, level):
         admin_lookup = self.retriever.download_file(
             url="admin_lookup.parquet",
-            account=self.configuration["account"],
+            account=self.account,
             container="polygon",
-            key=self.configuration["key"],
+            key=self.key,
             blob="admin_lookup.parquet",
         )
 
@@ -279,14 +280,8 @@ class Floodscan:
         return da_subset
 
     def blob_client(self):
-        try:
-            account = os.environ["STORAGE_ACCOUNT"]
-            key = os.environ["KEY"]
-        except Exception:
-            account = self.configuration["account"]
-            key = self.configuration["key"]
-        account_url = f"https://{account}.blob.core.windows.net"
-        return BlobServiceClient(account_url=account_url, credential=key)
+        account_url = f"https://{self.account}.blob.core.windows.net"
+        return BlobServiceClient(account_url=account_url, credential=self.key)
 
     def _get_latest_90_days_geotiffs(self, account, container, key):
         das = {}
