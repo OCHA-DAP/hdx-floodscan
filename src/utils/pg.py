@@ -6,17 +6,21 @@ from sqlalchemy import create_engine
 
 load_dotenv()
 
-AZURE_DB_PW_PROD = os.getenv("AZURE_DB_PW_PROD")
-AZURE_DB_PW_DEV = os.getenv("AZURE_DB_PW_DEV")
+AZURE_DB_UID_PROD = os.getenv("DSCI_AZ_DB_PROD_UID")
+AZURE_DB_PW_PROD = os.getenv("DSCI_AZ_DB_PROD_PW")
+AZURE_DB_UID_DEV = os.getenv("DSCI_AZ_DB_DEV_UID")
+AZURE_DB_PW_DEV = os.getenv("DSCI_AZ_DB_DEV_PW")
 
 
 def get_engine(mode):
     if mode == "prod":
+        uid = AZURE_DB_UID_PROD
         pw = AZURE_DB_PW_PROD
     else:
+        uid = AZURE_DB_UID_DEV
         pw = AZURE_DB_PW_DEV
 
-    url = f"postgresql+psycopg2://chdadmin:{pw}@chd-rasterstats-{mode}.postgres.database.azure.com/postgres"  # noqa: E501 E231
+    url = f"postgresql+psycopg2://{uid}:{pw}@chd-rasterstats-{mode}.postgres.database.azure.com/postgres"  # noqa: E501 E231
     return create_engine(url)
 
 
