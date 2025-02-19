@@ -32,8 +32,10 @@ jobs:
         STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
         CONTAINER: ${{ secrets.CONTAINER }}
         KEY: ${{ secrets.KEY }}
-        AZURE_DB_PW_DEV: ${{ secrets.DS_AZ_DB_DEV_UID }}
-        AZURE_DB_PW_PROD: ${{ secrets.DS_AZ_DB_PROD_UID }}
+        DSCI_AZ_DB_DEV_UID: ${{ secrets.DSCI_AZ_DB_DEV_UID }}
+        DSCI_AZ_DB_DEV_PW: ${{ secrets.DSCI_AZ_DB_DEV_PW }}
+        DSCI_AZ_DB_PROD_UID: ${{ secrets.DSCI_AZ_DB_PROD_UID }}
+        DSCI_AZ_DB_PROD_PW: ${{ secrets.DSCI_AZ_DB_PROD_PW }}
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
         python run.py
