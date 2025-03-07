@@ -18,7 +18,7 @@ allowed_tags:
 
 # Metadata
 title: "FloodScan: Near Real-Time and Historical Flood Mapping"
-update_frequency: "daily"
+update_frequency: "weekly"
 maintainer_id: "2f9fd160-2a16-49c0-89d6-0bc3230599bf"
 organization_id: "53acf7a0-29d5-453d-82ab-20daa6645128"
 90days_filename: "aer_floodscan_300s_SFED_90d.zip"
