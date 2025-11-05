@@ -15,4 +15,4 @@ lmoments3==1.0.7
 pyarrow==18.0.0
 SQLAlchemy==2.0.33
 psycopg2==2.9.10
-hdx-python-api==6.4.5
+hdx-python-api==6.5.2
