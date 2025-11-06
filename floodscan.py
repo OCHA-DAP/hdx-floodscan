@@ -262,7 +262,7 @@ class Floodscan:
         }
 
         res = copy(dataset.get_resource(0))
-        dataset.resources.append(res)
+        dataset.add_update_resource(res)
         resource = dataset.get_resource(1)
         resource.set_format("zipped geotiff")
         resource["name"] = resource_data["name"]
