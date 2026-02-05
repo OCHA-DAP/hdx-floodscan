@@ -295,8 +295,6 @@ class Floodscan:
             )
         ]
 
-        logger.info(existing_files)
-
         latest_available_file = sorted(existing_files)[-1]
         search_str = "([0-9]{4}-[0-9]{2}-[0-9]{2})"
         search_res = re.search(search_str, latest_available_file)
@@ -304,10 +302,9 @@ class Floodscan:
         dates = create_date_range(90, latest_available_date)
 
         for date in dates:
-            blob_name = f"aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
-            blob = f"floodscan/daily/v5/processed/{blob_name}"
+            blob = f"floodscan/daily/v5/processed/aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
 
-            if blob_name in existing_files:
+            if blob in existing_files:
                 geotiff_file_for_date = self.retriever.download_file(
                     url=blob,
                     account=account,
