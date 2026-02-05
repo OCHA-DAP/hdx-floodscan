@@ -302,18 +302,22 @@ class Floodscan:
         dates = create_date_range(90, latest_available_date)
 
         for date in dates:
-            blob = f"floodscan/daily/v5/processed/aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
+            blob_name = f"aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
+            blob = f"floodscan/daily/v5/processed/{blob_name}"
 
-            geotiff_file_for_date = self.retriever.download_file(
-                url=blob,
-                account=account,
-                container=container,
-                key=key,
-                blob=blob,
-            )
+            if blob_name in existing_files:
+                geotiff_file_for_date = self.retriever.download_file(
+                    url=blob,
+                    account=account,
+                    container=container,
+                    key=key,
+                    blob=blob,
+                )
 
-            da_in = rxr.open_rasterio(geotiff_file_for_date, chunks="auto")
-            das[date] = da_in.sel({"band": 1}, drop=True)
+                da_in = rxr.open_rasterio(geotiff_file_for_date, chunks="auto")
+                das[date] = da_in.sel({"band": 1}, drop=True)
+            else:
+                logger.warning(f"Missing blob {blob} for date {date.strftime(DATE_FORMAT)}.")
 
         return das
 
