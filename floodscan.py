@@ -295,6 +295,8 @@ class Floodscan:
             )
         ]
 
+        logger.info(existing_files)
+
         latest_available_file = sorted(existing_files)[-1]
         search_str = "([0-9]{4}-[0-9]{2}-[0-9]{2})"
         search_res = re.search(search_str, latest_available_file)
