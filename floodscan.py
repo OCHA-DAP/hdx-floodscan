@@ -241,7 +241,7 @@ class Floodscan:
                 row[date_header] = row_date
 
         rows
-        dataset.generate_resource_from_rows(
+        dataset.generate_resource(
             self.folder,
             resource_data["name"],
             rows,
