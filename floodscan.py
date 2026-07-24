@@ -37,13 +37,12 @@ DATE_FORMAT = "%Y-%m-%d"
 
 
 class Floodscan:
-    def __init__(self, configuration, retriever, folder, errors):
+    def __init__(self, configuration, retriever, folder):
         self.configuration = configuration
         self.retriever = retriever
         self.folder = folder
         self.manual_url = None
         self.dataset_data = {}
-        self.errors = errors
         self.created_date = None
         self.start_date = None
         self.latest_date = None
@@ -192,7 +191,7 @@ class Floodscan:
 
         return merged_zonal_stats
 
-    def generate_dataset_and_showcase(self, dataset_name):
+    def generate_dataset(self, dataset_name):
         # Setting metadata and configurations
         name = self.configuration["dataset_names"]["HDX-FLOODSCAN"]
         title = self.configuration["title"]

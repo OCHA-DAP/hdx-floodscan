@@ -13,7 +13,6 @@ from os.path import exists, expanduser, join
 from hdx.data.hdxobject import HDXError
 from hdx.facades.infer_arguments import facade
 from hdx.utilities.downloader import Download
-from hdx.utilities.errors_onexit import ErrorsOnExit
 from hdx.utilities.path import (
     progress_storing_folder,
     wheretostart_tempdir_batch,
@@ -171,49 +170,47 @@ class AzureBlobDownload(Download):
 
 def main(save: bool = False, use_saved: bool = False) -> None:
     """Generate datasets and create them in HDX"""
-    with ErrorsOnExit() as errors:
-        with wheretostart_tempdir_batch(lookup) as info:
-            folder = info["folder"]
-            with AzureBlobDownload() as downloader:
-                retriever = Retrieve(
-                    downloader, folder, "saved_data", folder, save, use_saved
-                )
-                folder = info["folder"]
-                batch = info["batch"]
-                configuration = Configuration.read()
-                floodscan = Floodscan(configuration, retriever, folder, errors)
-                dataset_names = floodscan.get_data()
-                logger.info(
-                    f"Number of datasets to upload: {len(dataset_names)}"
-                )
+    with wheretostart_tempdir_batch(lookup) as info:
+        folder = info["folder"]
+        with AzureBlobDownload() as downloader:
+            retriever = Retrieve(
+                downloader, folder, "saved_data", folder, save, use_saved
+            )
+            batch = info["batch"]
+            configuration = Configuration.read()
+            floodscan = Floodscan(configuration, retriever, folder)
+            dataset_names = floodscan.get_data()
+            logger.info(
+                f"Number of datasets to upload: {len(dataset_names)}"
+            )
 
-                for _, nextdict in progress_storing_folder(
-                    info, dataset_names, "name"
-                ):
-                    dataset_name = nextdict["name"]
-                    dataset = floodscan.generate_dataset_and_showcase(
-                        dataset_name=dataset_name
-                    )
-                    if dataset:
-                        dataset.update_from_yaml()
-                        dataset["notes"] = dataset["notes"].replace(
-                            "\n", "  \n"
-                        )  # ensure markdown has line breaks
-                        try:
-                            dataset.create_in_hdx(
-                                remove_additional_resources=True,
-                                updated_by_script=updated_by_script,
-                                batch=batch,
-                                ignore_fields=[
-                                    "resource:description",
-                                    "extras",
-                                ],
-                            )
-                        except HDXError as err:
-                            errors.add(
-                                f"Could not upload {dataset_name}: {err}"
-                            )
-                            continue
+            for _, nextdict in progress_storing_folder(
+                info, dataset_names, "name"
+            ):
+                dataset_name = nextdict["name"]
+                dataset = floodscan.generate_dataset(
+                    dataset_name=dataset_name
+                )
+                if dataset:
+                    dataset.update_from_yaml()
+                    dataset["notes"] = dataset["notes"].replace(
+                        "\n", "  \n"
+                    )  # ensure markdown has line breaks
+                    try:
+                        dataset.create_in_hdx(
+                            remove_additional_resources=True,
+                            updated_by_script=updated_by_script,
+                            batch=batch,
+                            ignore_fields=[
+                                "resource:description",
+                                "extras",
+                            ],
+                        )
+                    except HDXError as err:
+                        logger.error(
+                            f"Could not upload {dataset_name}: {err}"
+                        )
+                        continue
 
 
 if __name__ == "__main__":
