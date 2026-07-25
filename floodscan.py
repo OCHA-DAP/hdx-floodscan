@@ -10,62 +10,48 @@ HDX Pipeline:
 """
 import logging
 import os
-import os.path
 import re
 import shutil
 from copy import copy
 from datetime import datetime
+from io import BytesIO
 
 import numpy as np
+import ocha_stratus as stratus
 import pandas as pd
-import rioxarray as rxr
 import xarray as xr
-from azure.storage.blob import BlobServiceClient
 from hdx.data.dataset import Dataset
 from hdx.location.country import Country
 from slugify import slugify
 
-from src.utils import pg
-from src.utils import return_periods as rp
 from src.utils.date_utils import (
     create_date_range,
     get_start_and_last_date_from_90_days,
 )
+from src.utils.return_periods import fs_add_rp
 
 logger = logging.getLogger(__name__)
+
 DATE_FORMAT = "%Y-%m-%d"
 
 
 class Floodscan:
-    def __init__(self, configuration, retriever, folder):
+    def __init__(self, configuration, save, use_saved, tempdir, savedir):
         self.configuration = configuration
-        self.retriever = retriever
-        self.folder = folder
-        self.manual_url = None
+        self.save = save
+        self.use_saved = use_saved
+        self.folder = savedir if save or use_saved else tempdir
         self.dataset_data = {}
         self.created_date = None
         self.start_date = None
         self.latest_date = None
-
-        try:
-            self.account = os.environ["STORAGE_ACCOUNT"]
-            self.container = os.environ["CONTAINER"]
-            self.key = os.environ["KEY"]
-        except Exception:
-            self.account = self.configuration["account"]
-            self.container = self.configuration["container"]
-            self.key = self.configuration["key"]
+        self.stage = os.environ["BLOB_STAGE"]
 
     def get_data(self):
-
         dataset_name = self.configuration["dataset_names"]["HDX-FLOODSCAN"]
 
-        last90_days_files = self._get_latest_90_days_geotiffs(
-            self.account, self.container, self.key
-        )
-        historical_baseline = self._get_historical_baseline(
-            self.account, self.container, self.key
-        )
+        last90_days_files = self._get_latest_90_days_geotiffs()
+        historical_baseline = self._get_historical_baseline()
         last90_days_file = self._generate_zipped_file(
             last90_days_files, historical_baseline
         )
@@ -83,10 +69,10 @@ class Floodscan:
         shutil.rmtree("geotiffs")
 
         merged_zonal_stats_admin1 = self.get_zonal_stats_for_admin(
-            mode="prod", admin_level=1, band="SFED"
+            admin_level=1, band="SFED"
         )
         merged_zonal_stats_admin2 = self.get_zonal_stats_for_admin(
-            mode="prod", admin_level=2, band="SFED"
+            admin_level=2, band="SFED"
         )
 
         with pd.ExcelWriter(
@@ -111,23 +97,16 @@ class Floodscan:
         self.created_date = datetime.today().date()
         return [{"name": dataset_name}]
 
-    def get_adm2_labels(self, df_adm2_90d, level):
-        admin_lookup = self.retriever.download_file(
-            url="admin_lookup.parquet",
-            account=self.account,
-            container="polygon",
-            key=self.key,
-            blob="admin_lookup.parquet",
+    def get_adm_labels(self, df_90d, level):
+        admin_lookup = stratus.load_parquet_from_blob(
+            "admin_lookup.parquet",
+            self.stage,
+            "polygon",
         )
-
-        df_parquet_labels = pd.read_parquet(admin_lookup)
-
-        # %%
-        df_labels_adm2 = df_parquet_labels[df_parquet_labels.ADM_LEVEL == 2]
-
+        df_labels = admin_lookup[admin_lookup.ADM_LEVEL == level]
         df_fs_labelled = pd.merge(
-            df_adm2_90d,
-            df_labels_adm2,
+            df_90d,
+            df_labels,
             left_on=["iso3", "pcode"],
             right_on=["ISO3", f"ADM{level}_PCODE"],
             how="left",
@@ -143,36 +122,85 @@ class Floodscan:
             "valid_date",
             "value",
         ]
-
         df_fs_labelled_subset = df_fs_labelled[cols_subset]
 
         countries = []
         for iso3 in df_fs_labelled_subset["iso3"]:
             countries.append(Country.get_country_name_from_iso3(iso3))
-
         df_fs_labelled_subset["ADM0_NAME"] = countries
 
         return df_fs_labelled_subset
 
-    def get_zonal_stats_for_admin(self, mode, admin_level, band):
-        df_current = pg.fs_last_90_days(
-            mode=mode, admin_level=admin_level, band=band, only_HRP=True
-        )
-        df_with_labels = self.get_adm2_labels(df_current, admin_level)
+    def get_zonal_stats_for_admin(self, admin_level, band):
+        engine = stratus.get_engine(self.stage)
+
+        # get list of HRP countries
+        iso_query = "SELECT iso3 FROM iso3 WHERE has_active_hrp=true"
+        with engine.connect() as con:
+            df_iso3 = pd.read_sql_query(iso_query, con)
+        iso3_list = df_iso3["iso3"].tolist()
+        iso3_list = "('" + "','".join(iso3_list) + "')"
+
+        # use country list to get raster stats from last 90 days
+        query = f"""
+            SELECT iso3, pcode, valid_date, mean AS value
+            FROM floodscan
+            WHERE adm_level = {admin_level}
+              AND band = '{band}'
+              AND valid_date >= NOW() - INTERVAL '90 days'
+              AND iso3 IN {iso3_list}
+            """
+        with engine.connect() as con:
+            df_current = pd.read_sql_query(query, con)
+
+        df_with_labels = self.get_adm_labels(df_current, admin_level)
         df_current = df_with_labels.rename(
             columns={f"ADM{admin_level}_PCODE": "pcode"}
         )
-        df_yr_max = pg.fs_year_max(
-            mode=mode, admin_level=admin_level, band=band
-        )
-        df_w_rps = rp.fs_add_rp(
+
+        query_yr_max = f"""
+            SELECT iso3, pcode, DATE_TRUNC('year', valid_date) AS year_date, MAX(mean) AS value
+            FROM floodscan
+            WHERE adm_level = {admin_level}
+              AND band = '{band}'
+              AND valid_date <= '2023-12-31'
+            GROUP BY iso3, pcode, year_date
+        """
+        with engine.connect() as con:
+            df_yr_max = pd.read_sql_query(query_yr_max, con)
+
+        df_w_rps = fs_add_rp(
             df=df_current, df_maxima=df_yr_max, by=["iso3", "pcode"]
         )
         df_w_rps = df_w_rps.rename(columns={"value": band})
         df_w_rps["doy"] = pd.to_datetime(df_w_rps["valid_date"]).dt.dayofyear
-        df_rolling_11_day_mean = pg.fs_rolling_11_day_mean(
-            mode=mode, admin_level=admin_level, band=band, only_HRP=True
-        )
+
+        query_rolling_mean = f"""
+            WITH filtered_data AS (
+                SELECT iso3, pcode, valid_date, mean
+                FROM floodscan
+                WHERE adm_level = {admin_level}
+                    AND band = '{band}'
+                    AND valid_date >= DATE_TRUNC('year', NOW()) - INTERVAL '10 years'
+                    AND valid_date < DATE_TRUNC('year', NOW())
+                    AND iso3 IN {iso3_list}
+            ),
+            rolling_mean AS (
+                SELECT iso3, pcode, valid_date,
+                AVG(mean) OVER (PARTITION BY iso3, pcode ORDER BY valid_date
+                ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) AS rolling_mean
+                FROM filtered_data
+            ),
+            doy_mean AS (
+                SELECT iso3, pcode, EXTRACT(DOY FROM valid_date) AS doy,
+                AVG(rolling_mean) AS SFED_BASELINE
+                FROM rolling_mean
+                GROUP BY iso3, pcode, doy
+            )
+            SELECT * FROM doy_mean
+        """
+        with engine.connect() as con:
+            df_rolling_11_day_mean = pd.read_sql_query(query_rolling_mean, con)
 
         df_rolling_11_day_mean.iso3 = df_rolling_11_day_mean.iso3.astype(str)
         df_rolling_11_day_mean.pcode = df_rolling_11_day_mean.pcode.astype(str)
@@ -236,10 +264,9 @@ class Floodscan:
                 if len(str(row_date)) > 9:
                     row_date = row_date / 1000
                 row_date = datetime.utcfromtimestamp(row_date)
-                row_date = row_date.strftime("%Y-%m-%d")
+                row_date = row_date.strftime(DATE_FORMAT)
                 row[date_header] = row_date
 
-        rows
         dataset.generate_resource(
             self.folder,
             resource_data["name"],
@@ -278,65 +305,56 @@ class Floodscan:
         da_subset.attrs["long_name"] = band
         return da_subset
 
-    def blob_client(self):
-        account_url = f"https://{self.account}.blob.core.windows.net"
-        return BlobServiceClient(account_url=account_url, credential=self.key)
-
-    def _get_latest_90_days_geotiffs(self, account, container, key):
+    def _get_latest_90_days_geotiffs(self):
         das = {}
 
-        existing_files = [
-            x.name
-            for x in self.blob_client()
-            .get_container_client(container)
-            .list_blobs(
-                name_starts_with="floodscan/daily/v5/processed/aer_area"
-            )
-        ]
+        existing_files = stratus.list_container_blobs(
+            name_starts_with=f"{self.configuration['blob_path']}/processed/aer_area",
+            stage=self.stage,
+            container_name="raster",
+        )
 
         latest_available_file = sorted(existing_files)[-1]
         search_str = "([0-9]{4}-[0-9]{2}-[0-9]{2})"
         search_res = re.search(search_str, latest_available_file)
-        latest_available_date = datetime.strptime(search_res[0], "%Y-%m-%d")
+        latest_available_date = datetime.strptime(search_res[0], DATE_FORMAT)
         dates = create_date_range(90, latest_available_date)
 
         for date in dates:
-            blob = f"floodscan/daily/v5/processed/aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
+            blob = f"{self.configuration['blob_path']}/processed/aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
 
             if blob in existing_files:
-                geotiff_file_for_date = self.retriever.download_file(
-                    url=blob,
-                    account=account,
-                    container=container,
-                    key=key,
-                    blob=blob,
+                geotiff_file_for_date = stratus.open_blob_cog(
+                    blob,
+                    self.stage,
+                    container_name="raster",
                 )
-
-                da_in = rxr.open_rasterio(geotiff_file_for_date, chunks="auto")
-                das[date] = da_in.sel({"band": 1}, drop=True)
+                das[date] = geotiff_file_for_date.sel({"band": 1}, drop=True)
             else:
                 logger.warning(f"Missing blob {blob} for date {date.strftime(DATE_FORMAT)}.")
 
         return das
 
-    def _get_historical_baseline(self, account, container, key):
-        blob = self.configuration["baseline_filename"]
+    def _get_historical_baseline(self):
+        baseline_filename = self.configuration[f"baseline_filename_{self.stage}"]
+        blob = f"{self.configuration['blob_path']}/{baseline_filename}"
+        chunks = {"lat": 1080, "lon": 1080, "time": 1}
 
         if not os.path.isfile(blob):
-            historical_baseline_file = self.retriever.download_file(
-                url=blob,
-                account=account,
-                container=container,
-                key=key,
-                blob=blob,
+            historical_baseline = stratus.load_blob_data(
+                blob,
+                self.stage,
+                "raster",
+            )
+            ds_historical_baseline = xr.open_dataset(
+                BytesIO(historical_baseline),
+                engine="h5netcdf",
+                chunks=chunks,
             )
         else:
-            historical_baseline_file = blob
-
-        chunks = {"lat": 1080, "lon": 1080, "time": 1}
-        ds_historical_baseline = xr.open_dataset(
-            historical_baseline_file, chunks=chunks
-        )
+            ds_historical_baseline = xr.open_dataset(
+                blob, chunks=chunks
+            )
         ds_historical_baseline = ds_historical_baseline.rename_vars(
             {"__xarray_dataarray_variable__": "SFED_BASELINE"}
         )
@@ -364,6 +382,7 @@ class Floodscan:
             merged_temp = xr.merge(
                 [ds_current_sfed.SFED, h_sfed_temp.SFED_BASELINE],
                 combine_attrs="drop",
+                compat="no_conflicts",
             )
             merged_temp["SFED"] = merged_temp.SFED.rio.write_nodata(
                 np.nan, inplace=True
