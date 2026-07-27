@@ -8,6 +8,7 @@ from os.path import expanduser, join
 
 from hdx.api.configuration import Configuration
 from hdx.data.hdxobject import HDXError
+from hdx.data.user import User
 from hdx.facades.infer_arguments import facade
 from hdx.utilities.path import (
     progress_storing_folder,
@@ -40,6 +41,8 @@ def main(
         tempdir = info["folder"]
         batch = info["batch"]
         configuration = Configuration.read()
+        User.check_current_user_write_access("aer")
+
         floodscan = Floodscan(configuration, save, use_saved, tempdir, _SAVED_DATA_DIR)
         dataset_names = floodscan.get_data()
         logger.info(
@@ -55,9 +58,6 @@ def main(
             )
             if dataset:
                 dataset.update_from_yaml()
-                dataset["notes"] = dataset["notes"].replace(
-                    "\n", "  \n"
-                )  # ensure markdown has line breaks
                 try:
                     dataset.create_in_hdx(
                         remove_additional_resources=True,
@@ -69,6 +69,8 @@ def main(
                         f"Could not upload {dataset_name}: {err}"
                     )
                     continue
+
+        logger.info("Finished processing!")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 HDX Pipeline:
 ------------
 
-- This pipeline produces two datasets for FloodScan:
+- This pipeline produces two resources for FloodScan:
     - Zonal stats for the most recently available data
     - Geotiffs for the past 90 days
 
@@ -12,7 +12,6 @@ import logging
 import os
 import re
 import shutil
-from copy import copy
 from datetime import datetime
 from io import BytesIO
 
@@ -21,7 +20,9 @@ import ocha_stratus as stratus
 import pandas as pd
 import xarray as xr
 from hdx.data.dataset import Dataset
+from hdx.data.resource import Resource
 from hdx.location.country import Country
+from hdx.utilities.dictandlist import dict_of_sets_add
 from slugify import slugify
 
 from src.utils.date_utils import (
@@ -42,13 +43,13 @@ class Floodscan:
         self.use_saved = use_saved
         self.folder = savedir if save or use_saved else tempdir
         self.dataset_data = {}
-        self.created_date = None
+        self.dataset_metadata = {}
         self.start_date = None
         self.latest_date = None
         self.stage = os.environ["BLOB_STAGE"]
 
     def get_data(self):
-        dataset_name = self.configuration["dataset_names"]["HDX-FLOODSCAN"]
+        dataset_name = self.configuration["dataset_name"]  # TODO: change this once we split the dataset into countries
 
         last90_days_files = self._get_latest_90_days_geotiffs()
         historical_baseline = self._get_historical_baseline()
@@ -58,8 +59,8 @@ class Floodscan:
 
         # Find the minimum and maximum dates
         (
-            self.start_date,
-            self.latest_date,
+            self.dataset_metadata["start_date"],
+            self.dataset_metadata["end_date"],
         ) = get_start_and_last_date_from_90_days(last90_days_file)
 
         # save all geotiffs as one zipped file
@@ -88,13 +89,11 @@ class Floodscan:
                 excel_merged_file, sheet_name="admin2", index=False
             )
 
-        self.dataset_data[dataset_name] = [
-            merged_zonal_stats_admin2.apply(lambda x: x.to_dict(), axis=1),
-            last90_days_file,
-            excel_merged_file,
-        ]
+        self.dataset_data[dataset_name] = {
+            "excel": excel_merged_file,
+            "geotiff": last90_days_file,
+        }
 
-        self.created_date = datetime.today().date()
         return [{"name": dataset_name}]
 
     def get_adm_labels(self, df_90d, level):
@@ -127,6 +126,7 @@ class Floodscan:
         countries = []
         for iso3 in df_fs_labelled_subset["iso3"]:
             countries.append(Country.get_country_name_from_iso3(iso3))
+            dict_of_sets_add(self.dataset_metadata, "iso3s", iso3)
         df_fs_labelled_subset["ADM0_NAME"] = countries
 
         return df_fs_labelled_subset
@@ -220,80 +220,41 @@ class Floodscan:
         return merged_zonal_stats
 
     def generate_dataset(self, dataset_name):
-        # Setting metadata and configurations
-        name = self.configuration["dataset_names"]["HDX-FLOODSCAN"]
-        title = self.configuration["title"]
-        dataset = Dataset({"name": slugify(name), "title": title})
-        rows = self.dataset_data[dataset_name][0]
-        dataset.set_maintainer(self.configuration["maintainer_id"])
-        dataset.set_organization(self.configuration["organization_id"])
-        dataset.set_expected_update_frequency(
-            self.configuration["update_frequency"]
-        )
-        dataset.set_subnational(False)
+        # Setting metadata
+        title = self.configuration["dataset_title"]
+        dataset = Dataset({"name": slugify(dataset_name), "title": title})
         dataset["notes"] = self.configuration["notes"]
+        dataset.add_tags(self.configuration["tags"])
 
-        resource_data = {
-            "name": self.configuration["stats_filename"],
-            "description": self.configuration["description_stats_file"],
-        }
-
-        tags = sorted([t for t in self.configuration["allowed_tags"]])
-        dataset.add_tags(tags)
-
-        # Setting time period
-        start_date = self.start_date
-        ongoing = False
-        if not start_date:
-            logger.error(f"Start date missing for {dataset_name}")
+        # time period
+        start_date = self.dataset_metadata.get("start_date")
+        end_date = self.dataset_metadata.get("end_date")
+        if not start_date or not end_date:
+            logger.error(f"Date missing for {dataset_name}")
             return None, None
-        dataset.set_time_period(start_date, self.latest_date, ongoing)
+        dataset.set_time_period(start_date, end_date)
 
-        headers = rows[0].keys()
-        date_headers = [
-            h
-            for h in headers
-            if "date" in h.lower() and type(rows[0][h]) == int
-        ]
-        for row in rows:
-            dataset.add_other_location(row["iso3"])
-            for date_header in date_headers:
-                row_date = row[date_header]
-                if not row_date:
-                    continue
-                if len(str(row_date)) > 9:
-                    row_date = row_date / 1000
-                row_date = datetime.utcfromtimestamp(row_date)
-                row_date = row_date.strftime(DATE_FORMAT)
-                row[date_header] = row_date
+        iso3s = self.dataset_metadata["iso3s"]
+        dataset.add_country_locations(iso3s)
 
-        dataset.generate_resource(
-            self.folder,
-            resource_data["name"],
-            rows,
-            resource_data,
-            list(rows[0].keys()),
-            encoding="utf-8",
+        resource = Resource(
+            {
+                "name": self.configuration["stats_filename"],
+                "description": self.configuration["description_stats_file"],
+            }
         )
-        res = dataset.get_resource(0)
-        res["name"] = self.configuration["stats_filename"]
-        res["description"] = self.configuration["description_stats_file"]
-        res.set_file_to_upload(self.dataset_data[dataset_name][2])
-        res.set_format("xlsx")
-        dataset.add_update_resource(res)
+        resource.set_file_to_upload(self.dataset_data[dataset_name]["excel"])
+        resource.set_format("xlsx")
+        dataset.add_update_resource(resource)
 
-        resource_data = {
-            "name": self.configuration["90days_filename"],
-            "description": self.configuration["description_90days_file"],
-        }
-
-        res = copy(dataset.get_resource(0))
-        dataset._resources.append(res)
-        resource = dataset.get_resource(1)
+        resource = Resource(
+            {
+                "name": self.configuration["90days_filename"],
+                "description": self.configuration["description_90days_file"],
+            }
+        )
+        resource.set_file_to_upload(self.dataset_data[dataset_name]["geotiff"])
         resource.set_format("zipped geotiff")
-        resource["name"] = resource_data["name"]
-        resource["description"] = resource_data["description"]
-        resource.set_file_to_upload(self.dataset_data[dataset_name][1])
         dataset.add_update_resource(resource)
 
         return dataset
