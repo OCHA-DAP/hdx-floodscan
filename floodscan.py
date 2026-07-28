@@ -65,9 +65,8 @@ class Floodscan:
 
         # save all geotiffs as one zipped file
         last90_days_file = shutil.make_archive(
-            "baseline_zipped_file", "zip", "geotiffs"
+            "files" + os.sep + "baseline_zipped_file", "zip", "files" + os.sep + "geotiffs"
         )
-        shutil.rmtree("geotiffs")
 
         merged_zonal_stats_admin1 = self.get_zonal_stats_for_admin(
             admin_level=1, band="SFED"
@@ -76,8 +75,9 @@ class Floodscan:
             admin_level=2, band="SFED"
         )
 
+        shutil.copy("config" + os.sep + "floodscan_readme.xlsx", "files" + os.sep + "hdx_floodscan_zonal_stats.xlsx")
         with pd.ExcelWriter(
-            "files" + os.sep + "floodscan_readme.xlsx",
+            "files" + os.sep + "hdx_floodscan_zonal_stats.xlsx",
             mode="a",
             engine="openpyxl",
             if_sheet_exists="replace",
@@ -325,7 +325,7 @@ class Floodscan:
     def _generate_zipped_file(
         self, last90_days_geotiffs, ds_historical_baseline
     ):
-        os.makedirs("geotiffs", exist_ok=True)
+        os.makedirs("files" + os.sep + "geotiffs", exist_ok=True)
         out_files = []
 
         logger.info("Calculating baseline...")
