@@ -14,10 +14,14 @@ import re
 import shutil
 from datetime import datetime
 from io import BytesIO
+from os.path import basename, isfile, join
+from zipfile import ZipFile
 
+import geopandas as gpd
 import numpy as np
 import ocha_stratus as stratus
 import pandas as pd
+import rioxarray as rio
 import xarray as xr
 from hdx.data.dataset import Dataset
 from hdx.data.resource import Resource
@@ -49,52 +53,64 @@ class Floodscan:
         self.stage = os.environ["BLOB_STAGE"]
 
     def get_data(self):
-        dataset_name = self.configuration["dataset_name"]  # TODO: change this once we split the dataset into countries
-
-        last90_days_files = self._get_latest_90_days_geotiffs()
-        historical_baseline = self._get_historical_baseline()
-        last90_days_file = self._generate_zipped_file(
-            last90_days_files, historical_baseline
-        )
-
-        # Find the minimum and maximum dates
-        (
-            self.dataset_metadata["start_date"],
-            self.dataset_metadata["end_date"],
-        ) = get_start_and_last_date_from_90_days(last90_days_file)
-
-        # save all geotiffs as one zipped file
-        last90_days_file = shutil.make_archive(
-            "files" + os.sep + "baseline_zipped_file", "zip", "files" + os.sep + "geotiffs"
-        )
-
+        # download zonal stats
         merged_zonal_stats_admin1 = self.get_zonal_stats_for_admin(
             admin_level=1, band="SFED"
         )
         merged_zonal_stats_admin2 = self.get_zonal_stats_for_admin(
             admin_level=2, band="SFED"
         )
+        iso3s = list(merged_zonal_stats_admin1["iso3"]) + list(merged_zonal_stats_admin2["iso3"])
+        iso3s = ["global"] + list(set(iso3s))
 
-        shutil.copy("config" + os.sep + "floodscan_readme.xlsx", "files" + os.sep + "hdx_floodscan_zonal_stats.xlsx")
-        with pd.ExcelWriter(
-            "files" + os.sep + "hdx_floodscan_zonal_stats.xlsx",
-            mode="a",
-            engine="openpyxl",
-            if_sheet_exists="replace",
-        ) as excel_merged_file:
-            merged_zonal_stats_admin1.to_excel(
-                excel_merged_file, sheet_name="admin1", index=False
+        last90_days_files = self._get_latest_90_days_geotiffs()
+        historical_baseline = self._get_historical_baseline()
+        last90_days_files = self._generate_geotiffs(
+            last90_days_files, historical_baseline
+        )
+        country_folders = self.clip_last90_days_files(last90_days_files, iso3s)
+
+        # Find the minimum and maximum dates
+        (
+            self.dataset_metadata["start_date"],
+            self.dataset_metadata["end_date"],
+        ) = get_start_and_last_date_from_90_days(last90_days_files)
+
+        for iso3 in iso3s:
+            country_folder = country_folders[iso3]
+
+            # save all geotiffs as one zipped file
+            last90_days_file = shutil.make_archive(
+                join(country_folder, self.configuration["90days_filename"]), "zip", join(country_folder, "geotiffs")
             )
-            merged_zonal_stats_admin2.to_excel(
-                excel_merged_file, sheet_name="admin2", index=False
-            )
 
-        self.dataset_data[dataset_name] = {
-            "excel": excel_merged_file,
-            "geotiff": last90_days_file,
-        }
+            excel_file = join(country_folder, self.configuration["stats_filename"])
+            shutil.copy(join("config", "floodscan_readme.xlsx"), excel_file)
+            with pd.ExcelWriter(
+                excel_file,
+                mode="a",
+                engine="openpyxl",
+                if_sheet_exists="replace",
+            ) as excel_merged_file:
+                if iso3 == "global":
+                    zonal_stats_admin1 = merged_zonal_stats_admin1
+                    zonal_stats_admin2 = merged_zonal_stats_admin2
+                else:
+                    zonal_stats_admin1 = merged_zonal_stats_admin1[merged_zonal_stats_admin1["iso3"] == iso3]
+                    zonal_stats_admin2 = merged_zonal_stats_admin2[merged_zonal_stats_admin2["iso3"] == iso3]
+                zonal_stats_admin1.to_excel(
+                    excel_merged_file, sheet_name="admin1", index=False
+                )
+                zonal_stats_admin2.to_excel(
+                    excel_merged_file, sheet_name="admin2", index=False
+                )
 
-        return [{"name": dataset_name}]
+            self.dataset_data[iso3] = {
+                "excel": excel_file,
+                "geotiff": last90_days_file,
+            }
+
+        return [{"iso3": iso3} for iso3 in iso3s]
 
     def get_adm_labels(self, df_90d, level):
         admin_lookup = stratus.load_parquet_from_blob(
@@ -126,7 +142,7 @@ class Floodscan:
         countries = []
         for iso3 in df_fs_labelled_subset["iso3"]:
             countries.append(Country.get_country_name_from_iso3(iso3))
-            dict_of_sets_add(self.dataset_metadata, "iso3s", iso3)
+            dict_of_sets_add(self.dataset_metadata, "iso3s", iso3)  # TODO: get country list by dataset
         df_fs_labelled_subset["ADM0_NAME"] = countries
 
         return df_fs_labelled_subset
@@ -219,10 +235,14 @@ class Floodscan:
 
         return merged_zonal_stats
 
-    def generate_dataset(self, dataset_name):
-        # Setting metadata
+    def generate_dataset(self, iso3):
+        dataset_name = self.configuration["dataset_name"]
         title = self.configuration["dataset_title"]
-        dataset = Dataset({"name": slugify(dataset_name), "title": title})
+        if iso3 != "global":
+            country_name = Country.get_country_name_from_iso3(iso3)
+            dataset_name = slugify(f"{dataset_name}-{iso3}")
+            title = f"{country_name} - {title}"
+        dataset = Dataset({"name": dataset_name, "title": title})
         dataset["notes"] = self.configuration["notes"]
         dataset.add_tags(self.configuration["tags"])
 
@@ -234,8 +254,11 @@ class Floodscan:
             return None, None
         dataset.set_time_period(start_date, end_date)
 
-        iso3s = self.dataset_metadata["iso3s"]
-        dataset.add_country_locations(iso3s)
+        if iso3 == "global":
+            iso3s = self.dataset_metadata["iso3s"]
+            dataset.add_country_locations(iso3s)
+        else:
+            dataset.add_country_location(iso3)
 
         resource = Resource(
             {
@@ -243,17 +266,17 @@ class Floodscan:
                 "description": self.configuration["description_stats_file"],
             }
         )
-        resource.set_file_to_upload(self.dataset_data[dataset_name]["excel"])
+        resource.set_file_to_upload(self.dataset_data[iso3]["excel"])
         resource.set_format("xlsx")
         dataset.add_update_resource(resource)
 
         resource = Resource(
             {
-                "name": self.configuration["90days_filename"],
+                "name": self.configuration["90days_filename"] + ".zip",
                 "description": self.configuration["description_90days_file"],
             }
         )
-        resource.set_file_to_upload(self.dataset_data[dataset_name]["geotiff"])
+        resource.set_file_to_upload(self.dataset_data[iso3]["geotiff"])
         resource.set_format("zipped geotiff")
         dataset.add_update_resource(resource)
 
@@ -296,12 +319,48 @@ class Floodscan:
 
         return das
 
+    def clip_last90_days_files(self, last90_days_files, iso3s):
+        country_folders = {}
+        clip_bounds = {}
+
+        # download country boundaries and get bounding boxes
+        for iso3 in iso3s:
+            if iso3 == "global":
+                country_folders[iso3] = "files"
+                continue
+            country_folders[iso3] = join("files", iso3)
+            os.makedirs(join("files", iso3, "geotiffs"), exist_ok=True)
+
+            # download shapefiles
+            container = stratus.get_container_client("polygon", self.stage)
+            blob_client = container.get_blob_client(f"{iso3.lower()}_shp.zip")
+            temp_path = join(self.folder, f"{iso3}_shapefile.zip")
+            with open(temp_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
+
+            with ZipFile(temp_path, "r") as zip_ref:
+                zip_ref.extractall(join(self.folder, iso3))
+            gdf = gpd.read_file(join(self.folder, iso3, f"{iso3.lower()}_adm0.shp"))
+            minx, miny, maxx, maxy = gdf.total_bounds
+            clip_bounds[iso3] = minx, miny, maxx, maxy
+
+        # load and clip each raster
+        for file in last90_days_files:
+            ds = rio.open_rasterio(file)
+            for iso3, bounds in clip_bounds.items():
+                minx, miny, maxx, maxy = bounds
+                ds_clip = ds.sel(x=slice(minx, maxx), y=slice(maxy, miny))
+                out_file = join("files", iso3, "geotiffs", basename(file))
+                ds_clip.rio.to_raster(out_file, driver="COG")
+
+        return country_folders
+
     def _get_historical_baseline(self):
         baseline_filename = self.configuration[f"baseline_filename_{self.stage}"]
         blob = f"{self.configuration['blob_path']}/{baseline_filename}"
         chunks = {"lat": 1080, "lon": 1080, "time": 1}
 
-        if not os.path.isfile(blob):
+        if not isfile(blob):
             historical_baseline = stratus.load_blob_data(
                 blob,
                 self.stage,
@@ -322,10 +381,10 @@ class Floodscan:
 
         return ds_historical_baseline
 
-    def _generate_zipped_file(
+    def _generate_geotiffs(
         self, last90_days_geotiffs, ds_historical_baseline
     ):
-        os.makedirs("files" + os.sep + "geotiffs", exist_ok=True)
+        os.makedirs(join("files", "geotiffs"), exist_ok=True)
         out_files = []
 
         logger.info("Calculating baseline...")
@@ -354,7 +413,7 @@ class Floodscan:
             merged_temp = merged_temp.rio.write_crs(4326)
 
             # Save geotiff
-            out_file = f"geotiffs/{int(dt_temp_str)}_aer_floodscan_sfed.tif"
+            out_file = join("files", "geotiffs", f"{int(dt_temp_str)}_aer_floodscan_sfed.tif")
             merged_temp.rio.to_raster(out_file, driver="COG")
             out_files.append(out_file)
 

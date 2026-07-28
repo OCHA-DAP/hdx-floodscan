@@ -44,18 +44,16 @@ def main(
         User.check_current_user_write_access("aer")
 
         floodscan = Floodscan(configuration, save, use_saved, tempdir, _SAVED_DATA_DIR)
-        dataset_names = floodscan.get_data()
+        iso3s = floodscan.get_data()
         logger.info(
-            f"Number of datasets to upload: {len(dataset_names)}"
+            f"Number of datasets to upload: {len(iso3s)}"
         )
 
         for _, nextdict in progress_storing_folder(
-            info, dataset_names, "name"
+            info, iso3s, "iso3"
         ):
-            dataset_name = nextdict["name"]
-            dataset = floodscan.generate_dataset(
-                dataset_name=dataset_name
-            )
+            iso3 = nextdict["iso3"]
+            dataset = floodscan.generate_dataset(iso3)
             if dataset:
                 dataset.update_from_yaml()
                 try:
@@ -66,7 +64,7 @@ def main(
                     )
                 except HDXError as err:
                     logger.error(
-                        f"Could not upload {dataset_name}: {err}"
+                        f"Could not upload dataset for {iso3}: {err}"
                     )
                     continue
 
