@@ -305,7 +305,7 @@ class Floodscan:
         dates = create_date_range(90, latest_available_date)
 
         for date in dates:
-            blob = f"{self.configuration['processed_blob_path']}/aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif'
+            blob = f"{self.configuration['processed_blob_path']}/aer_area_300s_v{date.strftime(DATE_FORMAT)}_v05r01.tif"
 
             if blob in existing_files:
                 geotiff_file_for_date = stratus.open_blob_cog(
