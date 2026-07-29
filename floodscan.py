@@ -21,7 +21,7 @@ import geopandas as gpd
 import numpy as np
 import ocha_stratus as stratus
 import pandas as pd
-import rioxarray as rio
+import rioxarray as rxr
 import xarray as xr
 from hdx.data.dataset import Dataset
 from hdx.data.resource import Resource
@@ -346,7 +346,7 @@ class Floodscan:
 
         # load and clip each raster
         for file in last90_days_files:
-            ds = rio.open_rasterio(file)
+            ds = rxr.open_rasterio(file)
             for iso3, bounds in clip_bounds.items():
                 minx, miny, maxx, maxy = bounds
                 ds_clip = ds.sel(x=slice(minx, maxx), y=slice(maxy, miny))
