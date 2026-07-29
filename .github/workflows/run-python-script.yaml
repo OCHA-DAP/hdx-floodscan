@@ -24,16 +24,17 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Run script
       env:
-        HDX_SITE: ${{ secrets.HDX_SITE }}
+        HDX_SITE: ${{ vars.HDX_SITE }}
         HDX_KEY: ${{ secrets.HDX_BOT_SCRAPERS_API_TOKEN }}
-        PREPREFIX: ${{ secrets.HDX_PIPELINE_PREPREFIX }}
-        USER_AGENT: ${{ secrets.USER_AGENT }}
-        BLOB_URL: ${{ secrets.BLOB_URL }}
-        STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
-        CONTAINER: ${{ secrets.CONTAINER }}
-        KEY: ${{ secrets.KEY }}
+        PREPREFIX: ${{ vars.HDX_USER_AGENT_PREPREFIX }}
+        USER_AGENT: ${{ vars.USER_AGENT }}
+        BLOB_STAGE: ${{ vars.BLOB_STAGE }}
+        DSCI_AZ_BLOB_PROD_SAS: ${{ secrets.DSCI_AZ_BLOB_PROD_SAS }}
+        DSCI_AZ_BLOB_DEV_SAS: ${{ secrets.DSCI_AZ_BLOB_DEV_SAS }}
+        DSCI_AZ_DB_DEV_HOST: ${{ secrets.DSCI_AZ_DB_DEV_HOST }}
         DSCI_AZ_DB_DEV_UID: ${{ secrets.DSCI_AZ_DB_DEV_UID }}
         DSCI_AZ_DB_DEV_PW: ${{ secrets.DSCI_AZ_DB_DEV_PW }}
+        DSCI_AZ_DB_PROD_HOST: ${{ secrets.DSCI_AZ_DB_PROD_HOST }}
         DSCI_AZ_DB_PROD_UID: ${{ secrets.DSCI_AZ_DB_PROD_UID }}
         DSCI_AZ_DB_PROD_PW: ${{ secrets.DSCI_AZ_DB_PROD_PW }}
         GH_TOKEN: ${{ secrets.GH_TOKEN }}

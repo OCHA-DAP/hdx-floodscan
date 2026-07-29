@@ -15,3 +15,6 @@ pyarrow==22.0.0
 SQLAlchemy==2.0.44
 psycopg2-binary==2.9.11
 hdx-python-api==6.6.5
+ocha-stratus==0.1.7
+h5netcdf==1.8.1
+geopandas==1.0.1
