@@ -1,26 +1,32 @@
-# Databricks Asset Bundle — the HDX FloodScan publish as a Databricks job.
+# Databricks Asset Bundle — hdx-floodscan
 #
-# Why Databricks: the rasterstats Postgres servers are losing public network
-# access. GitHub runners can't reach the private endpoint, so the publish
-# (which reads public.floodscan from the prod DB) moves onto Job Compute inside
-# the workspace VNet. The DB host + creds come from the dsci secret scope via
-# the Job Compute policy (ocha-stratus reads DSCI_AZ_DB_PROD_*); nothing in
-# this repo names a host, so flipping private IP <-> FQDN is a secret change.
+# One job, "HDX FloodScan Prepare": the DB half of the HDX publish. The
+# rasterstats Postgres is reachable only through its private endpoint, so the
+# three public.floodscan queries the publish needs run here and are parked as
+# parquet on the dev blob (projects/hdx-floodscan/intermediate/latest/ + dated
+# copies + manifest.json). The task then dispatches the GitHub workflow
+# run-python-script.yaml, which does the actual HDX publish from those
+# intermediates with the HDX org secrets that only GitHub holds.
 #
-#   databricks bundle validate -t prod -p default
-#   databricks bundle deploy   -t prod -p default
-#   databricks bundle run hdx_floodscan_publish -t prod -p default
+#     prepare   scripts/prepare_intermediates.py --stage prod --secret GH_FLOODSCAN_TOKEN
 #
-# Chaining: upstream is the "Run FloodScan" workspace job in ds-raster-pipelines
-# (23:00 UTC, ~20 min: download -> Raster Stats FLOODSCAN -> "Trigger GitHub
-# Action"). Ideal wiring is for its last task to become a run_job_task pointing
-# at this job (then set pause_status: PAUSED here). Until the owner of that job
-# does so, this job runs on its own schedule 75 min after the upstream start.
+# The wrapper databricks/run_task.py sets STAGE (= which DB to read: prod),
+# copies src/ + scripts/ off wsfs, resolves GH_FLOODSCAN_TOKEN from the dsci
+# scope at run time (a missing key fails the task readably) and shells out.
+# DB/blob credentials come from the Job Compute policy. No HDX credentials
+# anywhere on Databricks.
 #
-# Secrets this job needs in the dsci scope beyond the policy defaults:
-#   HDX_KEY          HDX API token of the hdx bot (was GH secret HDX_BOT_SCRAPERS_API_TOKEN)
-#   HDX_USER_AGENT   user-agent string (was GH secret USER_AGENT)
-#   HDX_PREPREFIX    user-agent preprefix (was GH secret HDX_PIPELINE_PREPREFIX)
+# Timing: upstream "Run FloodScan" (ds-raster-pipelines, owner adm.itot6) runs
+# 23:00 UTC and finishes in ~20 min; its own last task still dispatches the
+# GitHub workflow, which the workflow's freshness guard turns into a no-op.
+# This job runs 00:15 UTC and dispatches the real publish. Should the owner
+# repoint Run FloodScan's last task at this job (run_job_task), redeploy with
+# --var pause_status=PAUSED.
+#
+#   databricks bundle validate -t prod -p DEFAULT
+#   databricks bundle deploy   -t prod -p DEFAULT
+#   databricks bundle run hdx_floodscan_prepare -t prod -p DEFAULT
+#   databricks bundle deploy   -t dev  -p DEFAULT --var git_branch=my-branch   # feature test (paused)
 
 bundle:
   name: hdx-floodscan
@@ -33,73 +39,43 @@ variables:
   git_branch:
     description: Branch the job pulls the code from
     default: main
-  existing_cluster_id:
-    description: Interactive cluster for the dev target
-    default: "0515-161935-i2w5mxhc"
-  hdx_site:
-    description: HDX site to publish to ("prod" | "stage" | "demo")
-    default: "prod"
+  stage:
+    description: DB to read public.floodscan from (the intermediates always go to the dev blob)
+    default: prod
   pause_status:
-    description: Schedule state for the prod target (PAUSED while secrets are missing or once chained upstream)
+    description: Schedule state for the prod target (PAUSED once chained from Run FloodScan)
     default: "UNPAUSED"
 
 targets:
   dev:
-    # Feature-branch testing on the personal cluster:
-    #   databricks bundle deploy -t dev -p default --var git_branch=my-branch
-    # Development mode auto-pauses the schedule and prefixes the job name.
     mode: development
     default: true
     workspace:
-      profile: default
-    resources:
-      jobs:
-        hdx_floodscan_publish:
-          tasks:
-            - task_key: publish
-              existing_cluster_id: ${var.existing_cluster_id}
+      profile: DEFAULT
 
   prod:
     mode: production
     workspace:
-      profile: default
+      profile: DEFAULT
       root_path: /Workspace/Users/adm.tdowning@global.un.org/.bundle/${bundle.name}/${bundle.target}
     run_as:
       user_name: adm.tdowning@global.un.org
     resources:
       jobs:
-        hdx_floodscan_publish:
+        hdx_floodscan_prepare:
           schedule:
             pause_status: ${var.pause_status}
-          job_clusters:
-            - job_cluster_key: publish_cluster
-              new_cluster:
-                # Job Compute policy (000C79D951EAF0D6): ephemeral single-worker
-                # cluster with every dsci DB/blob secret injected as env vars.
-                # 15.4 LTS matches the upstream Run FloodScan cluster, so the
-                # pinned xarray/rioxarray/dask set below is known to install.
-                policy_id: "000C79D951EAF0D6"
-                apply_policy_default_values: true
-                spark_version: "15.4.x-scala2.12"
-                node_type_id: "Standard_DS4_v2"
-                num_workers: 1
-                spark_env_vars:
-                  HDX_SITE: ${var.hdx_site}
-                  HDX_KEY: "{{secrets/dsci/HDX_KEY}}"
-                  USER_AGENT: "{{secrets/dsci/HDX_USER_AGENT}}"
-                  PREPREFIX: "{{secrets/dsci/HDX_PREPREFIX}}"
-          tasks:
-            - task_key: publish
-              job_cluster_key: publish_cluster
 
 resources:
   jobs:
-    hdx_floodscan_publish:
-      name: HDX FloodScan Publish
+    hdx_floodscan_prepare:
+      name: HDX FloodScan Prepare
       description: >-
-        Builds the HDX "FloodScan" dataset (admin1/2 zonal-stats xlsx with
-        return periods + baseline, and the 90-day SFED/SFED_BASELINE COG zip)
-        from the prod rasterstats DB and prod raster blob, and updates it on HDX.
+        Runs the public.floodscan queries behind the HDX "FloodScan" dataset
+        (yearly maxima, 10-year day-of-year baseline, last 90 days; admin 1+2,
+        SFED) against the prod rasterstats DB, parks them as parquet on the dev
+        blob under projects/hdx-floodscan/intermediate/, then dispatches the
+        GitHub publisher (run-python-script.yaml).
       git_source:
         git_url: https://github.com/OCHA-DAP/hdx-floodscan.git
         git_provider: gitHub
@@ -113,32 +89,43 @@ resources:
         databricks: job
         type: hdx-publish
         input_schema: public.floodscan
-        output: hdx:floodscan
+        output_blob: projects/hdx-floodscan/intermediate
       email_notifications:
         on_failure:
           - tristan.downing@un.org
         no_alert_for_skipped_runs: true
+      permissions:
+        - group_name: dsci
+          level: CAN_MANAGE
+      parameters:
+        - name: stage
+          default: ${var.stage}
+      job_clusters:
+        - job_cluster_key: main
+          new_cluster:
+            # Job Compute policy (000C79D951EAF0D6): ephemeral single-worker
+            # cluster with every dsci DB/blob secret injected as env vars.
+            policy_id: "000C79D951EAF0D6"
+            apply_policy_default_values: true
+            num_workers: 1
       tasks:
-        - task_key: publish
-          timeout_seconds: 5400
+        - task_key: prepare
+          job_cluster_key: main
+          timeout_seconds: 3600
           spark_python_task:
-            python_file: run.py
+            python_file: databricks/run_task.py
             source: GIT
-          # The prod job cluster is created fresh every run, so this list is
-          # the ENTIRE non-DBR environment. Raster pins mirror the upstream
-          # Run FloodScan job (same DBR 15.4).
+            parameters:
+              - "scripts/prepare_intermediates.py"
+              - "--stage"
+              - "{{job.parameters.stage}}"
+              - "--secret"
+              - "GH_FLOODSCAN_TOKEN"
+          # Only the DB/blob side runs here — no raster or HDX libraries.
           libraries:
-            - pypi: { package: "hdx-python-api==6.6.5" }
             - pypi: { package: "ocha-stratus>=0.1.7" }
-            - pypi: { package: "numpy==1.26.4" }
-            - pypi: { package: "xarray==2024.3.0" }
-            - pypi: { package: "rioxarray==0.16.0" }
-            - pypi: { package: "dask==2024.7.0" }
-            - pypi: { package: "netCDF4==1.7.2" }
-            - pypi: { package: "h5netcdf==1.3.0" }
-            - pypi: { package: "lmoments3==1.0.7" }
-            - pypi: { package: "scipy" }
-            - pypi: { package: "openpyxl>=3.1" }
-            - pypi: { package: "coloredlogs==15.0.1" }
-            - pypi: { package: "python-dotenv==1.0.1" }
-            - pypi: { package: "tqdm==4.66.4" }
+            - pypi: { package: "psycopg2-binary" }
+            - pypi: { package: "sqlalchemy>=2.0" }
+            - pypi: { package: "pyarrow" }
+            - pypi: { package: "python-dotenv" }
+            - pypi: { package: "requests" }
