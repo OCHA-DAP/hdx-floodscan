@@ -1,4 +1,8 @@
-# This workflow will install Python dependencies and run the script
+# The HDX publish no longer runs on GitHub runners: the rasterstats Postgres
+# servers are private-endpoint only, so it runs as the Databricks job
+# "HDX FloodScan Publish" (databricks.yml). This workflow is kept so the
+# upstream "Run FloodScan" Databricks job, whose last task still dispatches it,
+# keeps succeeding — it does nothing but say where the publish went.
 
 name: Run script
 
@@ -11,44 +15,8 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python 3.x
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.10"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Run script
-      env:
-        HDX_SITE: ${{ secrets.HDX_SITE }}
-        HDX_KEY: ${{ secrets.HDX_BOT_SCRAPERS_API_TOKEN }}
-        PREPREFIX: ${{ secrets.HDX_PIPELINE_PREPREFIX }}
-        USER_AGENT: ${{ secrets.USER_AGENT }}
-        BLOB_URL: ${{ secrets.BLOB_URL }}
-        STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
-        CONTAINER: ${{ secrets.CONTAINER }}
-        KEY: ${{ secrets.KEY }}
-        DSCI_AZ_DB_DEV_UID: ${{ secrets.DSCI_AZ_DB_DEV_UID }}
-        DSCI_AZ_DB_DEV_PW: ${{ secrets.DSCI_AZ_DB_DEV_PW }}
-        DSCI_AZ_DB_PROD_UID: ${{ secrets.DSCI_AZ_DB_PROD_UID }}
-        DSCI_AZ_DB_PROD_PW: ${{ secrets.DSCI_AZ_DB_PROD_PW }}
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      run: |
-        python run.py
-    - name: Send mail
-      if: failure()
-      uses: dawidd6/action-send-mail@v3
-      with:
-        server_address: ${{secrets.HDX_PIPELINE_EMAIL_SERVER}}
-        server_port: ${{secrets.HDX_PIPELINE_EMAIL_PORT}}
-        username: ${{secrets.HDX_PIPELINE_EMAIL_USERNAME}}
-        password: ${{secrets.HDX_PIPELINE_EMAIL_PASSWORD}}
-        subject: "FAILED: ${{github.repository}} run job"
-        body: GitHub Actions run job for ${{github.repository}} failed!
-        to: ${{secrets.HDX_EMAIL_LIST}}
-        from: ${{secrets.HDX_PIPELINE_EMAIL_FROM}}
-        content_type: text/html
+      - name: Publish moved to Databricks
+        run: |
+          echo "The HDX FloodScan publish runs as the Databricks job 'HDX FloodScan Publish'"
+          echo "(see databricks.yml). This workflow is a no-op kept for the upstream dispatch."

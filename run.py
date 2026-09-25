@@ -3,12 +3,12 @@
 Top level script. Calls other functions that generate datasets that this script then creates in HDX.
 
 """
-import base64
-import hashlib
-import hmac
 import logging
-from datetime import datetime
-from os.path import exists, expanduser, join
+from os import makedirs
+from os.path import basename, dirname, exists, expanduser, join
+from tempfile import gettempdir
+
+import ocha_stratus as stratus
 
 from hdx.data.hdxobject import HDXError
 from hdx.facades.infer_arguments import facade
@@ -33,35 +33,28 @@ updated_by_script = "HDX Scraper: FloodScan"
 
 
 class AzureBlobDownload(Download):
+    """Downloader that fetches blobs through ocha-stratus (SAS from the
+    DSCI_AZ_BLOB_{DEV,PROD}_SAS env vars) instead of a storage-account key.
+    Keeps the hdx Retrieve interface: Retrieve.download_file() calls this with
+    url/path plus the extra kwargs the pipeline passes (container, blob).
+    """
+
     def download_file(
         self,
         url: str,
-        account: str,
-        container: str,
-        key: str,
-        blob: None,
+        container: Optional[str] = None,
+        blob: Optional[str] = None,
+        stage: str = "prod",
         **kwargs: Any,
     ) -> str:
-        """Download file from blob storage and store in provided folder or temporary
-        folder if no folder supplied.
+        """Download a blob and store it at ``path`` (or folder/filename).
 
         Args:
-            url (str): URL for the exact blob location
-            account (str): Storage account to access the blob
-            container (str): Container to download from
-            key (str): Key to access the blob
-            blob (str): Name of the blob to be downloaded. If empty, then it is assumed to download the whole container.
-            **kwargs: See below
-            folder (str): Folder to download it to. Defaults to temporary folder.
-            filename (str): Filename to use for downloaded file. Defaults to deriving from url.
-            path (str): Full path to use for downloaded file instead of folder and filename.
-            overwrite (bool): Whether to overwrite existing file. Defaults to False.
-            keep (bool): Whether to keep already downloaded file. Defaults to False.
-            post (bool): Whether to use POST instead of GET. Defaults to False.
-            parameters (Dict): Parameters to pass. Defaults to None.
-            timeout (float): Timeout for connecting to URL. Defaults to None (no timeout).
-            headers (Dict): Headers to pass. Defaults to None.
-            encoding (str): Encoding to use for text response. Defaults to None (best guess).
+            url (str): Blob name (kept for the Retrieve interface; ``blob`` wins).
+            container (str): Container to download from.
+            blob (str): Name of the blob to download. Defaults to ``url``.
+            stage (str): "dev" or "prod" storage account. Defaults to "prod".
+            **kwargs: folder / filename / path / overwrite / keep as in Download.
 
         Returns:
             str: Path of downloaded file
@@ -71,102 +64,19 @@ class AzureBlobDownload(Download):
         path = kwargs.get("path")
         overwrite = kwargs.get("overwrite", False)
         keep = kwargs.get("keep", False)
+        blob = blob or url
 
-        request_time = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
-        api_version = "2018-03-28"
-        parameters = {
-            "verb": "GET",
-            "Content-Encoding": "",
-            "Content-Language": "",
-            "Content-Length": "",
-            "Content-MD5": "",
-            "Content-Type": "",
-            "Date": "",
-            "If-Modified-Since": "",
-            "If-Match": "",
-            "If-None-Match": "",
-            "If-Unmodified-Since": "",
-            "Range": "",
-            "CanonicalizedHeaders": "x-ms-date:"
-            + request_time
-            + "\nx-ms-version:"
-            + api_version
-            + "\n",
-            "CanonicalizedResource": "/"
-            + account
-            + "/"
-            + container
-            + "/"
-            + blob,
-        }
-
-        signature = (
-            parameters["verb"]
-            + "\n"
-            + parameters["Content-Encoding"]
-            + "\n"
-            + parameters["Content-Language"]
-            + "\n"
-            + parameters["Content-Length"]
-            + "\n"
-            + parameters["Content-MD5"]
-            + "\n"
-            + parameters["Content-Type"]
-            + "\n"
-            + parameters["Date"]
-            + "\n"
-            + parameters["If-Modified-Since"]
-            + "\n"
-            + parameters["If-Match"]
-            + "\n"
-            + parameters["If-None-Match"]
-            + "\n"
-            + parameters["If-Unmodified-Since"]
-            + "\n"
-            + parameters["Range"]
-            + "\n"
-            + parameters["CanonicalizedHeaders"]
-            + parameters["CanonicalizedResource"]
-        )
-
-        signed_string = base64.b64encode(
-            hmac.new(
-                base64.b64decode(key),
-                msg=signature.encode("utf-8"),
-                digestmod=hashlib.sha256,
-            ).digest()
-        ).decode()
-
-        headers = {
-            "x-ms-date": request_time,
-            "x-ms-version": api_version,
-            "Authorization": ("SharedKey " + account + ":" + signed_string),
-        }
-
-        url = (
-            "https://"
-            + account
-            + ".blob.core.windows.net/"
-            + container
-            + "/"
-            + blob
-        )
-
-        if keep and exists(url):
-            print(f"The blob URL exists: {url}")
+        if not path:
+            path = join(folder or gettempdir(), filename or basename(blob))
+        if keep and exists(path) and not overwrite:
+            logger.info(f"Keeping existing file {path}")
             return path
-        self.setup(
-            url=url,
-            stream=True,
-            post=kwargs.get("post", False),
-            parameters=kwargs.get("parameters"),
-            timeout=kwargs.get("timeout"),
-            headers=headers,
-            encoding=kwargs.get("encoding"),
-        )
-        return self.stream_path(
-            path, f"Download of {url} failed in retrieval of stream!"
-        )
+
+        makedirs(dirname(path) or ".", exist_ok=True)
+        container_client = stratus.get_container_client(container, stage=stage)
+        with open(path, "wb") as f:
+            container_client.download_blob(blob).readinto(f)
+        return path
 
 
 def main(save: bool = False, use_saved: bool = False) -> None:

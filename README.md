@@ -29,12 +29,39 @@ pip install -e .
 
 ### Environment keys
 
+DB and blob access go through [ocha-stratus](https://github.com/OCHA-DAP/ocha-stratus),
+so a local `.env` needs the standard team variables (read-only is enough):
+
 ```shell
-DSCI_AZ_SAS_DEV=<provided on request>
-DSCI_AZ_SAS_PROD=<provided on request>
-AZURE_DB_PW=<provided on request>
-AZURE_DB_UID=<provided on request>
+DSCI_AZ_DB_PROD_HOST=<provided on request>
+DSCI_AZ_DB_PROD_UID=<provided on request>
+DSCI_AZ_DB_PROD_PW=<provided on request>
+DSCI_AZ_BLOB_PROD_SAS=<provided on request>
+# HDX
+HDX_SITE=prod
+HDX_KEY=<hdx bot token>
+USER_AGENT=<user agent>
+PREPREFIX=<preprefix>
 ```
+
+`STAGE=dev` switches both the DB and the blob account to dev (then the `_DEV_`
+variants of the variables above are needed).
+
+## Deployment
+
+The publish runs as the Databricks job **HDX FloodScan Publish**, defined in
+`databricks.yml` and deployed with the Databricks CLI:
+
+```shell
+databricks bundle validate -t prod -p default
+databricks bundle deploy   -t prod -p default
+```
+
+It runs on the shared Job Compute policy, which injects the DB/blob secrets;
+the HDX credentials come from the `dsci` secret scope (`HDX_KEY`,
+`HDX_USER_AGENT`, `HDX_PREPREFIX`). The upstream data are produced by the
+`Run FloodScan` job in ds-raster-pipelines (23:00 UTC), which still dispatches
+the (now no-op) GitHub workflow in this repo; this job is scheduled 00:15 UTC.
 
 ### Formatting
 

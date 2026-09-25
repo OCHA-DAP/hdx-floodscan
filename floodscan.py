@@ -18,9 +18,9 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+import ocha_stratus as stratus
 import rioxarray as rxr
 import xarray as xr
-from azure.storage.blob import BlobServiceClient
 from hdx.data.dataset import Dataset
 from hdx.location.country import Country
 from slugify import slugify
@@ -34,6 +34,11 @@ from src.utils.date_utils import (
 
 logger = logging.getLogger(__name__)
 DATE_FORMAT = "%Y-%m-%d"
+# Data plane: which DB + blob storage account to read from. The HDX dataset is
+# built from prod data; the env override exists only for testing against dev.
+STAGE = os.getenv("STAGE", "prod")
+RASTER_CONTAINER = "raster"
+POLYGON_CONTAINER = "polygon"
 
 
 class Floodscan:
@@ -47,26 +52,14 @@ class Floodscan:
         self.created_date = None
         self.start_date = None
         self.latest_date = None
-
-        try:
-            self.account = os.environ["STORAGE_ACCOUNT"]
-            self.container = os.environ["CONTAINER"]
-            self.key = os.environ["KEY"]
-        except Exception:
-            self.account = self.configuration["account"]
-            self.container = self.configuration["container"]
-            self.key = self.configuration["key"]
+        self.stage = STAGE
 
     def get_data(self):
 
         dataset_name = self.configuration["dataset_names"]["HDX-FLOODSCAN"]
 
-        last90_days_files = self._get_latest_90_days_geotiffs(
-            self.account, self.container, self.key
-        )
-        historical_baseline = self._get_historical_baseline(
-            self.account, self.container, self.key
-        )
+        last90_days_files = self._get_latest_90_days_geotiffs()
+        historical_baseline = self._get_historical_baseline()
         last90_days_file = self._generate_zipped_file(
             last90_days_files, historical_baseline
         )
@@ -84,10 +77,10 @@ class Floodscan:
         shutil.rmtree("geotiffs")
 
         merged_zonal_stats_admin1 = self.get_zonal_stats_for_admin(
-            mode="prod", admin_level=1, band="SFED"
+            mode=self.stage, admin_level=1, band="SFED"
         )
         merged_zonal_stats_admin2 = self.get_zonal_stats_for_admin(
-            mode="prod", admin_level=2, band="SFED"
+            mode=self.stage, admin_level=2, band="SFED"
         )
 
         with pd.ExcelWriter(
@@ -115,10 +108,9 @@ class Floodscan:
     def get_adm2_labels(self, df_adm2_90d, level):
         admin_lookup = self.retriever.download_file(
             url="admin_lookup.parquet",
-            account=self.account,
-            container="polygon",
-            key=self.key,
+            container=POLYGON_CONTAINER,
             blob="admin_lookup.parquet",
+            stage=self.stage,
         )
 
         df_parquet_labels = pd.read_parquet(admin_lookup)
@@ -279,18 +271,15 @@ class Floodscan:
         da_subset.attrs["long_name"] = band
         return da_subset
 
-    def blob_client(self):
-        account_url = f"https://{self.account}.blob.core.windows.net"
-        return BlobServiceClient(account_url=account_url, credential=self.key)
+    def raster_container_client(self):
+        return stratus.get_container_client(RASTER_CONTAINER, stage=self.stage)
 
-    def _get_latest_90_days_geotiffs(self, account, container, key):
+    def _get_latest_90_days_geotiffs(self):
         das = {}
 
         existing_files = [
             x.name
-            for x in self.blob_client()
-            .get_container_client(container)
-            .list_blobs(
+            for x in self.raster_container_client().list_blobs(
                 name_starts_with="floodscan/daily/v5/processed/aer_area"
             )
         ]
@@ -307,10 +296,9 @@ class Floodscan:
             if blob in existing_files:
                 geotiff_file_for_date = self.retriever.download_file(
                     url=blob,
-                    account=account,
-                    container=container,
-                    key=key,
+                    container=RASTER_CONTAINER,
                     blob=blob,
+                    stage=self.stage,
                 )
 
                 da_in = rxr.open_rasterio(geotiff_file_for_date, chunks="auto")
@@ -320,16 +308,15 @@ class Floodscan:
 
         return das
 
-    def _get_historical_baseline(self, account, container, key):
+    def _get_historical_baseline(self):
         blob = self.configuration["baseline_filename"]
 
         if not os.path.isfile(blob):
             historical_baseline_file = self.retriever.download_file(
                 url=blob,
-                account=account,
-                container=container,
-                key=key,
+                container=RASTER_CONTAINER,
                 blob=blob,
+                stage=self.stage,
             )
         else:
             historical_baseline_file = blob
