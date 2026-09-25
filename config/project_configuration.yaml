@@ -1,10 +1,6 @@
 # Collector specific configuration
 #TODO add details below to github secrets
-url: "test"
-account: "account"
-container: "container"
 baseline_filename: "floodscan/daily/v5/raw/baseline_v2025-01-01_v05r01.nc4"
-key: "key"
 
 dataset_names:
   HDX-FLOODSCAN: "floodscan"

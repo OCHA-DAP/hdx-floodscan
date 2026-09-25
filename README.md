@@ -29,12 +29,57 @@ pip install -e .
 
 ### Environment keys
 
+Blob access goes through [ocha-stratus](https://github.com/OCHA-DAP/ocha-stratus).
+A local `.env` for the publish half needs:
+
 ```shell
-DSCI_AZ_SAS_DEV=<provided on request>
-DSCI_AZ_SAS_PROD=<provided on request>
-AZURE_DB_PW=<provided on request>
-AZURE_DB_UID=<provided on request>
+DSCI_AZ_BLOB_DEV_SAS=<provided on request>    # intermediates (projects/hdx-floodscan/intermediate/)
+DSCI_AZ_BLOB_PROD_SAS=<provided on request>   # rasters + admin lookup
+# HDX
+HDX_SITE=prod
+HDX_KEY=<hdx bot token>
+USER_AGENT=<user agent>
+PREPREFIX=<preprefix>
 ```
+
+and for the prepare half (the DB queries), the prod read creds:
+
+```shell
+DSCI_AZ_DB_PROD_HOST=<provided on request>
+DSCI_AZ_DB_PROD_UID=<provided on request>
+DSCI_AZ_DB_PROD_PW=<provided on request>
+DSCI_AZ_BLOB_DEV_SAS_WRITE=<provided on request>
+```
+
+## How it runs
+
+The rasterstats DB is reachable only through its private endpoint, so the
+pipeline is split in two:
+
+1. **Databricks job `HDX FloodScan Prepare`** (`databricks.yml`, 00:15 UTC,
+   after `Run FloodScan` in ds-raster-pipelines has landed the day's zonal
+   stats). Runs the three `public.floodscan` queries in `src/utils/pg.py`
+   (`scripts/prepare_intermediates.py`), writes them as parquet to the dev
+   blob under `projects/hdx-floodscan/intermediate/{latest,YYYY-MM-DD}/` with a
+   `manifest.json`, then dispatches the GitHub workflow with the
+   `GH_FLOODSCAN_TOKEN` dsci secret. No HDX credentials on Databricks.
+2. **GitHub workflow `run-python-script.yaml`** — the publisher. Reads the
+   intermediates from blob (same `pg.fs_*` functions, now blob-backed), the
+   90-day COGs and admin lookup from the prod blob, builds the two resources
+   and updates the HDX dataset with the HDX org secrets. Guard:
+   `scripts/check_intermediates.py` skips the publish (green) when the manifest
+   is older than 6 h — the upstream `Run FloodScan` job still dispatches this
+   workflow before the prepare job has run. Dispatch by hand with `force=true`
+   to publish whatever is in `latest/`.
+
+Deploying the job (config changes only; code ships by pushing `main`):
+
+```shell
+databricks bundle validate -t prod -p DEFAULT
+databricks bundle deploy   -t prod -p DEFAULT
+```
+
+Local dry run of the prepare half (no dispatch): `python scripts/prepare_intermediates.py --no-dispatch`.
 
 ### Formatting
 
