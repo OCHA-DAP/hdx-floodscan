@@ -32,6 +32,9 @@ import sys
 import tempfile
 
 _COPY_DIRS = ("src", "scripts")
+# Root-level modules the scripts import (prepare_intermediates.py does
+# `from trigger_webhook import ...` after sys.path-inserting the repo root).
+_COPY_FILES = ("trigger_webhook.py",)
 _LOCAL_DIR = "hdx_floodscan_run"
 
 
@@ -123,6 +126,8 @@ def main(argv=None):
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
+    for name in _COPY_FILES:
+        shutil.copy2(os.path.join(repo_root, name), os.path.join(local_root, name))
 
     env = dict(os.environ)
     env["STAGE"] = args.stage
