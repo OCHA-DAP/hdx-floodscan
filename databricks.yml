@@ -70,12 +70,7 @@ resources:
   jobs:
     hdx_floodscan_prepare:
       name: HDX FloodScan Prepare
-      description: >-
-        Runs the public.floodscan queries behind the HDX "FloodScan" dataset
-        (yearly maxima, 10-year day-of-year baseline, last 90 days; admin 1+2,
-        SFED) against the prod rasterstats DB, parks them as parquet on the dev
-        blob under projects/hdx-floodscan/intermediate/, then dispatches the
-        GitHub publisher (run-python-script.yaml).
+      description: "Prepare FloodScan zonal statistics for the [HDX floodscan dataset](https://data.humdata.org/dataset/floodscan)"
       git_source:
         git_url: https://github.com/OCHA-DAP/hdx-floodscan.git
         git_provider: gitHub
@@ -86,9 +81,11 @@ resources:
         timezone_id: UTC
       max_concurrent_runs: 1
       tags:
-        databricks: job
-        type: hdx-publish
         input_schema: public.floodscan
+        databricks: job
+        type: publish
+        hazard: flood
+        kb: hdx-floodscan
         output_blob: projects/hdx-floodscan/intermediate
       email_notifications:
         on_failure:
