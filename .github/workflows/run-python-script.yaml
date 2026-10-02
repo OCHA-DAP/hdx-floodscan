@@ -40,6 +40,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: Check blob intermediates are fresh
+      id: check
+      env:
+        DSCI_AZ_BLOB_DEV_SAS: ${{ secrets.DSCI_AZ_BLOB_DEV_SAS }}
+      run: |
+        test -n "$DSCI_AZ_BLOB_DEV_SAS" || { echo "::error::DSCI_AZ_BLOB_DEV_SAS org secret is not visible to this repo"; exit 1; }
+        python scripts/check_intermediates.py --max-age-hours 6 --force "${{ inputs.force || 'false' }}"
     - name: Run script
       if: steps.check.outputs.publish == 'true'
       env:
