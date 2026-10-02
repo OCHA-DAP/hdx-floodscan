@@ -15,3 +15,4 @@ dataset_source: "AER FloodScan: Atmospheric and Environmental Research (AER)."
 package_creator: "isabelle-tot"
 private: False
 caveats: "Modified and Simplified by UN OCHA"
+subnational: "1"
