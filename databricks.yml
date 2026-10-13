@@ -100,11 +100,13 @@ resources:
       job_clusters:
         - job_cluster_key: main
           new_cluster:
-            # Job Compute policy (000C79D951EAF0D6): ephemeral single-worker
-            # cluster with every dsci DB/blob secret injected as env vars.
-            policy_id: "000C79D951EAF0D6"
+            # Job Compute (single node) policy (0017962FF5D1E3B9): ephemeral
+            # one-VM cluster with every dsci DB/blob secret injected as env vars.
+            # The policy fixes num_workers=0, so it is not set here. Unlike the
+            # original Job Compute policy it does not inject GH_FLOODSCAN_TOKEN;
+            # the task reads that from the dsci scope (--secret below).
+            policy_id: "0017962FF5D1E3B9"
             apply_policy_default_values: true
-            num_workers: 1
       tasks:
         - task_key: prepare
           job_cluster_key: main
