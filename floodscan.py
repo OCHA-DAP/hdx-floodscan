@@ -65,7 +65,7 @@ class Floodscan:
             mode=self.stage, admin_level=2, band="SFED"
         )
         iso3s = list(merged_zonal_stats_admin1["iso3"]) + list(merged_zonal_stats_admin2["iso3"])
-        iso3s = ["global"] + list(set(iso3s))
+        iso3s = ["global"] + sorted(set(iso3s))
 
         last90_days_files = self._get_latest_90_days_geotiffs()
         historical_baseline = self._get_historical_baseline()
