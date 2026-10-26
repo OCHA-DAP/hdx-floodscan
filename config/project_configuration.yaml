@@ -1,6 +1,7 @@
 # Collector specific configuration
-#TODO add details below to github secrets
+
 baseline_filename: "floodscan/daily/v5/raw/baseline_v2025-01-01_v05r01.nc4"
+# TODO: once data is in global folder, change to floodscan/daily/v5/processed/global
 processed_blob_path: "floodscan/daily/v5/processed"
 
 # dataset metadata
