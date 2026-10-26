@@ -15,7 +15,7 @@ This repo is being developed with python version 3.12.4
 
 ### Setup Instructions
 
-Create a virtual env & activate it. Then install the the requirements with
+Create a virtual env & activate it. Then install the requirements with
 
 ```shells
 pip install -r requirements.txt
@@ -66,7 +66,7 @@ pipeline is split in two:
 2. **GitHub workflow `run-python-script.yaml`** — the publisher. Reads the
    intermediates from blob (same `pg.fs_*` functions, now blob-backed), the
    90-day COGs and admin lookup from the prod blob, builds the two resources
-   and updates the HDX dataset with the HDX org secrets. Guard:
+   and updates HDX global and country datasets with the HDX org secrets. Guard:
    `scripts/check_intermediates.py` skips the publish (green) when the manifest
    is older than 6 h — the upstream `Run FloodScan` job still dispatches this
    workflow before the prepare job has run. Dispatch by hand with `force=true`
