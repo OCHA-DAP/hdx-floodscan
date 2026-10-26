@@ -212,7 +212,7 @@ class Floodscan:
         end_date = self.dataset_metadata.get("end_date")
         if not start_date or not end_date:
             logger.error(f"Date missing for {dataset_name}")
-            return None, None
+            return None
         dataset.set_time_period(start_date, end_date)
 
         if iso3 == "global":
