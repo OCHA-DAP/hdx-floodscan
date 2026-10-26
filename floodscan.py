@@ -45,13 +45,14 @@ POLYGON_CONTAINER = "polygon"
 
 
 class Floodscan:
-    def __init__(self, configuration, retriever, folder):
+    def __init__(self, configuration, retriever, folder, errors):
         self.configuration = configuration
         self.retriever = retriever
         self.folder = folder
         self.manual_url = None
         self.dataset_data = {}
         self.dataset_metadata = {}
+        self.errors = errors
         self.start_date = None
         self.latest_date = None
         self.stage = STAGE
@@ -81,7 +82,9 @@ class Floodscan:
         ) = get_start_and_last_date_from_90_days(last90_days_files)
 
         for iso3 in iso3s:
-            country_folder = country_folders[iso3]
+            country_folder = country_folders.get(iso3)
+            if not country_folder:
+                continue
 
             # save all geotiffs as one zipped file
             last90_days_file = shutil.make_archive(
@@ -208,6 +211,9 @@ class Floodscan:
         return merged_zonal_stats
 
     def generate_dataset(self, iso3):
+        if iso3 not in self.dataset_data:
+            return None
+
         dataset_name = self.configuration["dataset_name"]
         title = self.configuration["dataset_title"]
         if iso3 != "global":
@@ -315,12 +321,17 @@ class Floodscan:
             os.makedirs(join(self.folder, iso3, "geotiffs"), exist_ok=True)
 
             # download shapefiles
-            blob_client = self.polygon_container_client().get_blob_client(f"{iso3.lower()}_shp.zip")
-            temp_path = join(country_folder, f"{iso3}_shapefile.zip")
-            with open(temp_path, "wb") as download_file:
-                download_file.write(blob_client.download_blob().readall())
-
-            with ZipFile(temp_path, "r") as zip_ref:
+            try:
+                download_file = self.retriever.download_file(
+                    url=f"{iso3.lower()}_shp.zip",
+                    container=POLYGON_CONTAINER,
+                    blob=f"{iso3.lower()}_shp.zip",
+                    stage=self.stage,
+                )
+            except Exception as e:
+                self.errors.add(f"{iso3}: could not download shapefile")
+                continue
+            with ZipFile(download_file, "r") as zip_ref:
                 zip_ref.extractall(country_folder)
             gdf = gpd.read_file(join(country_folder, f"{iso3.lower()}_adm0.shp"))
             minx, miny, maxx, maxy = gdf.total_bounds

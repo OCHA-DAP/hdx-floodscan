@@ -12,9 +12,11 @@ from typing import Any, Callable, Optional  # noqa: F401
 import ocha_stratus as stratus
 
 from hdx.api.configuration import Configuration
+from hdx.data.hdxobject import HDXError
 from hdx.data.user import User
 from hdx.facades.infer_arguments import facade
 from hdx.utilities.downloader import Download
+from hdx.utilities.errors_onexit import ErrorsOnExit
 from hdx.utilities.path import (
     progress_storing_folder,
     wheretostart_tempdir_batch,
@@ -91,35 +93,40 @@ def main(
     Returns:
         None
     """
-    with wheretostart_tempdir_batch(_LOOKUP) as info:
-        folder = info["folder"]
-        batch = info["batch"]
-        configuration = Configuration.read()
-        User.check_current_user_write_access("aer")
-        with AzureBlobDownload() as downloader:
-            retriever = Retrieve(
-                downloader, folder, _SAVED_DATA_DIR, folder, save, use_saved
-            )
-            floodscan = Floodscan(configuration, retriever, folder)
-            iso3s = floodscan.get_data()
-            logger.info(
-                f"Number of datasets to upload: {len(iso3s)}"
-            )
+    with ErrorsOnExit() as errors:
+        with wheretostart_tempdir_batch(_LOOKUP) as info:
+            folder = info["folder"]
+            batch = info["batch"]
+            configuration = Configuration.read()
+            User.check_current_user_write_access("aer")
+            with AzureBlobDownload() as downloader:
+                retriever = Retrieve(
+                    downloader, folder, _SAVED_DATA_DIR, folder, save, use_saved
+                )
+                floodscan = Floodscan(configuration, retriever, folder, errors)
+                iso3s = floodscan.get_data()
+                logger.info(
+                    f"Number of datasets to upload: {len(iso3s)}"
+                )
 
-            for _, nextdict in progress_storing_folder(
-                info, iso3s, "iso3"
-            ):
-                iso3 = nextdict["iso3"]
-                dataset = floodscan.generate_dataset(iso3)
-                if dataset:
-                    dataset.update_from_yaml()
-                    dataset.create_in_hdx(
-                        remove_additional_resources=True,
-                        updated_by_script=_UPDATED_BY_SCRIPT,
-                        batch=batch,
-                    )
+                for _, nextdict in progress_storing_folder(
+                    info, iso3s, "iso3"
+                ):
+                    iso3 = nextdict["iso3"]
+                    dataset = floodscan.generate_dataset(iso3)
+                    if dataset:
+                        dataset.update_from_yaml()
+                        try:
+                            dataset.create_in_hdx(
+                                remove_additional_resources=True,
+                                updated_by_script=_UPDATED_BY_SCRIPT,
+                                batch=batch,
+                            )
+                        except HDXError:
+                            errors.add(f"{iso3}: could not upload dataset")
+                            continue
 
-            logger.info("Finished processing")
+                logger.info("Finished processing")
 
 
 if __name__ == "__main__":
