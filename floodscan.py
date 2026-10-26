@@ -320,7 +320,7 @@ class Floodscan:
             ds = rxr.open_rasterio(file)
             for iso3, bounds in clip_bounds.items():
                 minx, miny, maxx, maxy = bounds
-                ds_clip = ds.sel(x=slice(minx, maxx), y=slice(maxy, miny))
+                ds_clip = ds.rio.clip_box(minx, miny, maxx, maxy)
                 out_file = join(self.folder, iso3, "geotiffs", basename(file))
                 ds_clip.rio.to_raster(out_file, driver="COG")
 
