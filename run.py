@@ -12,7 +12,6 @@ from typing import Any, Callable, Optional  # noqa: F401
 import ocha_stratus as stratus
 
 from hdx.api.configuration import Configuration
-from hdx.data.hdxobject import HDXError
 from hdx.data.user import User
 from hdx.facades.infer_arguments import facade
 from hdx.utilities.downloader import Download
@@ -114,17 +113,11 @@ def main(
                 dataset = floodscan.generate_dataset(iso3)
                 if dataset:
                     dataset.update_from_yaml()
-                    try:
-                        dataset.create_in_hdx(
-                            remove_additional_resources=True,
-                            updated_by_script=_UPDATED_BY_SCRIPT,
-                            batch=batch,
-                        )
-                    except HDXError as err:
-                        logger.error(
-                            f"Could not upload dataset for {iso3}: {err}"
-                        )
-                        continue
+                    dataset.create_in_hdx(
+                        remove_additional_resources=True,
+                        updated_by_script=_UPDATED_BY_SCRIPT,
+                        batch=batch,
+                    )
 
             logger.info("Finished processing")
 
