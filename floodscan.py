@@ -137,17 +137,28 @@ class Floodscan:
             right_on=["ISO3", f"ADM{level}_PCODE"],
             how="left",
         )
-        cols_subset = [
-            "iso3",
-            "ADM0_PCODE",
-            "ADM0_NAME",
-            "ADM1_PCODE",
-            "ADM1_NAME",
-            "ADM2_PCODE",
-            "ADM2_NAME",
-            "valid_date",
-            "value",
-        ]
+        if level == 1:
+            cols_subset = [
+                "iso3",
+                "ADM0_PCODE",
+                "ADM0_NAME",
+                "ADM1_PCODE",
+                "ADM1_NAME",
+                "valid_date",
+                "value",
+            ]
+        else:
+            cols_subset = [
+                "iso3",
+                "ADM0_PCODE",
+                "ADM0_NAME",
+                "ADM1_PCODE",
+                "ADM1_NAME",
+                "ADM2_PCODE",
+                "ADM2_NAME",
+                "valid_date",
+                "value",
+            ]
 
         df_fs_labelled_subset = df_fs_labelled[cols_subset]
 
