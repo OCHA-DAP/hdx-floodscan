@@ -7,10 +7,13 @@ import logging
 from os import makedirs
 from os.path import basename, dirname, exists, expanduser, join
 from tempfile import gettempdir
+from typing import Any, Callable, Optional  # noqa: F401
 
 import ocha_stratus as stratus
 
+from hdx.api.configuration import Configuration
 from hdx.data.hdxobject import HDXError
+from hdx.data.user import User
 from hdx.facades.infer_arguments import facade
 from hdx.utilities.downloader import Download
 from hdx.utilities.errors_onexit import ErrorsOnExit
@@ -22,14 +25,12 @@ from hdx.utilities.retriever import Retrieve
 
 from floodscan import Floodscan
 
-from typing import Any, Callable, Optional  # noqa: F401
-
-from hdx.api.configuration import Configuration
 
 logger = logging.getLogger(__name__)
 
-lookup = "floodscan"
-updated_by_script = "HDX Scraper: FloodScan"
+_LOOKUP = "hdx-floodscan"
+_SAVED_DATA_DIR = "saved_data"
+_UPDATED_BY_SCRIPT = "HDX Scraper: FloodScan"
 
 
 class AzureBlobDownload(Download):
@@ -79,51 +80,53 @@ class AzureBlobDownload(Download):
         return path
 
 
-def main(save: bool = False, use_saved: bool = False) -> None:
-    """Generate datasets and create them in HDX"""
+def main(
+    save: bool = False,
+    use_saved: bool = False
+) -> None:
+    """Generate datasets and create them in HDX
+
+    Args:
+        save: Save downloaded data. Defaults to False.
+        use_saved: Use saved data. Defaults to False.
+
+    Returns:
+        None
+    """
     with ErrorsOnExit() as errors:
-        with wheretostart_tempdir_batch(lookup) as info:
+        with wheretostart_tempdir_batch(_LOOKUP) as info:
             folder = info["folder"]
+            batch = info["batch"]
+            configuration = Configuration.read()
+            User.check_current_user_write_access("aer")
             with AzureBlobDownload() as downloader:
                 retriever = Retrieve(
-                    downloader, folder, "saved_data", folder, save, use_saved
+                    downloader, folder, _SAVED_DATA_DIR, folder, save, use_saved
                 )
-                folder = info["folder"]
-                batch = info["batch"]
-                configuration = Configuration.read()
                 floodscan = Floodscan(configuration, retriever, folder, errors)
-                dataset_names = floodscan.get_data()
+                iso3s = floodscan.get_data()
                 logger.info(
-                    f"Number of datasets to upload: {len(dataset_names)}"
+                    f"Number of datasets to upload: {len(iso3s)}"
                 )
 
                 for _, nextdict in progress_storing_folder(
-                    info, dataset_names, "name"
+                    info, iso3s, "iso3"
                 ):
-                    dataset_name = nextdict["name"]
-                    dataset = floodscan.generate_dataset_and_showcase(
-                        dataset_name=dataset_name
-                    )
+                    iso3 = nextdict["iso3"]
+                    dataset = floodscan.generate_dataset(iso3)
                     if dataset:
                         dataset.update_from_yaml()
-                        dataset["notes"] = dataset["notes"].replace(
-                            "\n", "  \n"
-                        )  # ensure markdown has line breaks
                         try:
                             dataset.create_in_hdx(
                                 remove_additional_resources=True,
-                                updated_by_script=updated_by_script,
+                                updated_by_script=_UPDATED_BY_SCRIPT,
                                 batch=batch,
-                                ignore_fields=[
-                                    "resource:description",
-                                    "extras",
-                                ],
                             )
-                        except HDXError as err:
-                            errors.add(
-                                f"Could not upload {dataset_name}: {err}"
-                            )
+                        except HDXError:
+                            errors.add(f"{iso3}: could not upload dataset")
                             continue
+
+                logger.info("Finished processing")
 
 
 if __name__ == "__main__":
@@ -133,6 +136,6 @@ if __name__ == "__main__":
     facade(
         main,
         user_agent_config_yaml=join(expanduser("~"), ".useragents.yaml"),
-        user_agent_lookup=lookup,
+        user_agent_lookup=_LOOKUP,
         project_config_yaml=join("config", "project_configuration.yaml"),
     )
